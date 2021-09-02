@@ -13,29 +13,25 @@ Christian Cagnoni & Mansi Andrea
 
 #define NOISE -1
 
-bool ok;
-
-std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float eps, int dim, int length);
+std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, float* dataPoint, float eps, int dim, int length);
 
 std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint);
 
-void unionVectors(std::vector<float*>* remainder, std::vector<float*> neighbours);
+void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours);
 
-float calculateDistancesDB(float* dataPoints, float* dataPoint, int dim);
+float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim);
 
 void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
-	ok = useParallelism;
 	std::uniform_real_distribution<> distrib(0, sqrt(length) * 2);
 	float count = 0;
 	bool add = false;
 	const float minPts = 2;
 	float eps = distrib(seed);
-	printf("Max distance threshold: %f\n", eps);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
 		if (dataPoint[dim] != 0)
 			continue;
-		std::vector<float*> neighbours = findNeighbours(dataPoints, dataPoint, eps, dim, length);
+		std::vector<float*> neighbours = findNeighbours(dataPoints, useParallelism, dataPoint, eps, dim, length);
 		if (neighbours.size() < minPts) {
 			dataPoint[dim] = NOISE;
 			continue;
@@ -50,16 +46,16 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 			if (dataPoint[dim] != 0)
 				continue;
 			dataPoint[dim] = count;
-			std::vector<float*> neighboursChild = findNeighbours(dataPoints, dataPoint, eps, dim, length);
+			std::vector<float*> neighboursChild = findNeighbours(dataPoints, useParallelism, dataPoint, eps, dim, length);
 			if (neighboursChild.size() >= minPts)
-				unionVectors(&remainder, neighboursChild);
+				unionVectors(&remainder, useParallelism, neighboursChild);
 		}
 	}
-		
+
 }
 
-void unionVectors(std::vector<float*>* remainder, std::vector<float*> neighbours) {
-	#pragma parallel for if(ok)
+void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
+#pragma parallel for if(udeParallelism)
 	for (auto x : neighbours) {
 		auto it = std::find((*remainder).begin(), (*remainder).end(), x);
 		if (it == (*remainder).end()) {
@@ -80,12 +76,12 @@ std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint)
 	return neighbours;
 }
 
-std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float eps, int dim, int length) {
+std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, float* dataPoint, float eps, int dim, int length) {
 	std::vector<float*> neighbour;
-	#pragma parallel for if(ok)
+#pragma parallel for if(useParallelism)
 	for (int i = 0; i < length; i++) {
 		float* actualPoint = dataPoints[i];
-		float distance = calculateDistancesDB(actualPoint, dataPoint, dim);
+		float distance = calculateDistancesDB(actualPoint, useParallelism, dataPoint, dim);
 		if (distance <= eps) {
 			neighbour.push_back(actualPoint);
 		}
@@ -93,9 +89,9 @@ std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float e
 	return neighbour;
 }
 
-float calculateDistancesDB(float* dataPoints, float* dataPoint, int dim) {
+float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim) {
 	float distance = 0;
-	#pragma parallel for if(ok)
+#pragma parallel for if(useParallelism,)
 	for (int i = 0; i < dim; i++)
 		distance += pow(dataPoints[i] - dataPoint[i], 2);
 	distance = sqrt(distance);
