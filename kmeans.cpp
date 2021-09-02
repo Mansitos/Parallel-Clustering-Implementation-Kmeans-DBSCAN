@@ -29,6 +29,7 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 
 	//2. Place the centroids c_1, c_2, .....c_k randomly
 	float** centroids = new float*[k];
+	#pragma omp parallel for if(useParallelism)
 	for (int i = 0; i < k; i++) {
 		centroids[i] = new float[dim];
 
@@ -52,8 +53,11 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 
 			// When at least one centroid changed: convergence is not reached!
 			if (dataPoints[i][dim] != newCentroid) {
-				convergenceCheck = false;
-				dataPoints[i][dim] = newCentroid;
+				#pragma omp critical
+				{
+					convergenceCheck = false;
+					dataPoints[i][dim] = newCentroid;
+				}
 			}
 		}
 

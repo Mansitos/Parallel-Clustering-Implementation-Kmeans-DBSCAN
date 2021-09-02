@@ -9,8 +9,11 @@ Christian Cagnoni & Mansi Andrea
 #include <iostream>
 #include <math.h>
 #include <iterator>
+#include <omp.h>
 
 #define NOISE -1
+
+bool ok;
 
 std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float eps, int dim, int length);
 
@@ -21,6 +24,7 @@ void unionVectors(std::vector<float*>* remainder, std::vector<float*> neighbours
 float calculateDistancesDB(float* dataPoints, float* dataPoint, int dim);
 
 void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
+	ok = useParallelism;
 	std::uniform_real_distribution<> distrib(0, sqrt(length) * 2);
 	float count = 0;
 	bool add = false;
@@ -32,12 +36,10 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 		if (dataPoint[dim] != 0)
 			continue;
 		std::vector<float*> neighbours = findNeighbours(dataPoints, dataPoint, eps, dim, length);
-
 		if (neighbours.size() < minPts) {
 			dataPoint[dim] = NOISE;
 			continue;
 		}
-		
 		count++;
 		dataPoint[dim] = count;
 		std::vector<float*> remainder = difference(neighbours, dataPoint);
@@ -53,9 +55,11 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 				unionVectors(&remainder, neighboursChild);
 		}
 	}
+		
 }
 
 void unionVectors(std::vector<float*>* remainder, std::vector<float*> neighbours) {
+	#pragma parallel for if(ok)
 	for (auto x : neighbours) {
 		auto it = std::find((*remainder).begin(), (*remainder).end(), x);
 		if (it == (*remainder).end()) {
@@ -78,6 +82,7 @@ std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint)
 
 std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float eps, int dim, int length) {
 	std::vector<float*> neighbour;
+	#pragma parallel for if(ok)
 	for (int i = 0; i < length; i++) {
 		float* actualPoint = dataPoints[i];
 		float distance = calculateDistancesDB(actualPoint, dataPoint, dim);
@@ -90,6 +95,7 @@ std::vector<float*> findNeighbours(float** dataPoints, float* dataPoint, float e
 
 float calculateDistancesDB(float* dataPoints, float* dataPoint, int dim) {
 	float distance = 0;
+	#pragma parallel for if(ok)
 	for (int i = 0; i < dim; i++)
 		distance += pow(dataPoints[i] - dataPoint[i], 2);
 	distance = sqrt(distance);
