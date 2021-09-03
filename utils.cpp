@@ -69,3 +69,12 @@ void saveToCsv(float** dataPoints, int length, int dim) {
 	}
 }
 
+void linealizer(float* output, float** input, int length, int dim) {
+	int index = 0;
+	for (int i = 0; i < length; i++)
+		for (int j = 0; j <= dim; j++) {
+			output[index] = input[i][j];
+			index++;
+		}
+}
+

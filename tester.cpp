@@ -14,6 +14,7 @@ Mansi Andrea & Christian Cagnoni
 #include "utils.h"
 #include <chrono>
 #include "dbscan.h"
+#include "kmeansCUDA.h"
 
 using namespace std;
 
@@ -31,7 +32,7 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 
 	chrono::duration<double> time = std::chrono::seconds(0);
 
-	for (int rep = 0; rep < repetitions; rep++) {
+	/*for (int rep = 0; rep < repetitions; rep++) {
 		auto start = std::chrono::high_resolution_clock::now();
 		if (algorithm == "kmeans") {
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
@@ -40,11 +41,15 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 		} else if (algorithm == "dbscan") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
 		}
+		else if (algorithm == "dbscan_openmp") {
+			dbscan(dataPoints, numberOfPoints, dimOfPoints, true, seed);
+		}
 		auto finish = std::chrono::high_resolution_clock::now();
 		chrono::duration<double> elapsed = finish - start;
 		time += elapsed;
 		clearClusterColumn(dataPoints, numberOfPoints, dimOfPoints);
-	}
+	}*/
+	k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false,2, seed);
 	delete dataPoints; // memory clear
 	return time/repetitions;
 }
@@ -58,7 +63,7 @@ void runTestSession(bool saveToCsv = false) {
 	int reps = 10;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghts = 8;
+	const int nLenghts = 5;
 	int lenghtsToTest[nLenghts] = {10, 50, 100, 1000, 10000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
@@ -67,8 +72,8 @@ void runTestSession(bool saveToCsv = false) {
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 1;
-	string algorithmsToTest[] = {"dbscan"};
+	const int nAlgs = 4;
+	string algorithmsToTest[] = {"kmeans","kmeans_openmp","dbscan","dbscan_openmp"};
 
 	ofstream file("tests.csv");
 	if (saveToCsv) {
@@ -86,8 +91,8 @@ void runTestSession(bool saveToCsv = false) {
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
 
 		for (int dim = 0; dim < nDims; dim++) {
-			for (int length = 0; length < nLenghts; length++) {
-				chrono::duration<double> meanTime = runTest(lenghtsToTest[length], dimensionsToTest[dim], algorithmsToTest[alg], reps);
+			for (int length = 0; length < nLenghts - 1; length++) {
+				chrono::duration<double> meanTime = runTest(lenghtsToTest[length], dimensionsToTest[dim], algorithmsToTest[alg], reps,seed);
 				
 				testIndex++;
 
