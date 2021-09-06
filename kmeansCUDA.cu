@@ -1,5 +1,6 @@
 ﻿#include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include "device_functions.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <random>
@@ -14,23 +15,23 @@ __device__ float euclideanDistance(float* dataPoint, float* centroid, int dim);
 
 __device__ int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 
-bool convergence = false;
+__device__ bool convergenceCheck=true;
 
-__device__ float euclideanDistance_device(float* dataPoint, float* centroid, int dim) {
+__device__ float euclideanDistance_device(float* dataPoint, int tid, float* centroid,int index, int dim) {
 	float sum = 0;
 	for (int i = 0; i < dim; i++) {
-		sum += pow((dataPoint[i] - centroid[i]), 2);
+		sum += pow((dataPoint[tid+i] - centroid[index+i]), 2);
 	}
 	float distance = sqrt(sum);
 	return distance;
 }
 
-__device__ int calculateCentroid_device(float* dataPoint, int dim, int k, float** centroids) {
-	int nearestCentroidIndex = dataPoint[dim];
+__device__ int calculateCentroid_device(float* dataPoint,int tid, int dim, int k, float* centroids) {
+	int nearestCentroidIndex = dataPoint[tid+dim];
 	bool firstIteration = true;
 	float minDistance = 0;
 	for (int i = 0; i < k; i++) {
-		float distance = euclideanDistance_device(dataPoint, centroids[i], dim);
+		float distance = euclideanDistance_device(dataPoint, tid, centroids,i*dim, dim);
 		if (firstIteration) {
 			firstIteration = false;
 		}
@@ -42,12 +43,90 @@ __device__ int calculateCentroid_device(float* dataPoint, int dim, int k, float*
 	return nearestCentroidIndex;
 }
 
-__global__ void k_means_cuda_device(float* d_dataPoints, float* d_centroids, int length, int dim, int k) {
+__global__ void k_means_cuda_device_update_centroids(float* d_dataPoints, float* d_centroids,int* assignedPoints, int length, int dim, int k) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
-	if (tid < length) {
-		printf("%f\n", d_dataPoints[tid]);
-		//d_dataPoints[tid][dim] = calculateCentroid_device(d_dataPoints[tid], dim, k, d_centroids);
+	if (threadIdx.x < k)
+		assignedPoints[tid] = 0;
+	int tmp = tid * k;
+	if (tmp < k * dim) {
+		for (int i = tmp; i < tmp + dim; i++)
+			d_centroids[i] = 0;
 	}
+	//tid *= (dim + 1);
+	if (tid >= length * (dim + 1))
+		return;
+	__syncthreads();
+	extern __shared__ float s[];
+	float* b_centroids=s;
+	int* b_assignedPoints=(int*)&b_centroids[k*(dim+1)];
+	if(threadIdx.x==0)
+		for (int i = 0; i < k; i++) {
+			b_assignedPoints[i] = 0;
+			for (int j = 0; j < dim; j++)
+				b_centroids[i + j] = 0;
+		}
+	__syncthreads();
+
+	if (tid % (dim + 1) == 0) {
+		atomicAdd(&b_centroids[((int)d_dataPoints[tid + dim] * k)],d_dataPoints[tid]);
+	} else if ((tid + 1) % (dim + 1) != 0) {
+		atomicAdd(&b_centroids[((int)d_dataPoints[tid + (tid % (dim + 1))] * k) + (tid % (dim + 1))],d_dataPoints[tid]);
+	}
+	else {
+		atomicAdd(&b_assignedPoints[(int)d_dataPoints[tid]],1);
+	}
+
+	__syncthreads();
+
+	if(threadIdx.x==0)
+		for (int i = 0; i < k; i++) {
+			atomicAdd(&assignedPoints[i], b_assignedPoints[i]);
+			for (int j = 0; j < dim; j++) {
+				atomicAdd(&d_centroids[(i*dim) + j], b_centroids[(i*dim) + j]);
+			}
+		}
+	__syncthreads();
+
+	if (tmp < k * dim) {
+		if (assignedPoints[tmp / k] != 0)
+			for (int i = tmp; i < tmp + dim; i++)
+				d_centroids[i] /= assignedPoints[tmp / k];
+	}
+	/*tid *= k;
+	if (tid < k * dim) {
+		int assignedPoints = 0;
+		for (int i = tid; i < tid + dim; i++)
+			d_centroids[i] = 0;
+		for (int i = dim; i < length * (dim + 1); i += (dim + 1)) {
+			if (d_dataPoints[i] == tid/k) {
+				int index = tid;
+				for (int j = i - dim; j < i; j++) {
+					d_centroids[index] += d_dataPoints[j];
+					index++;
+				}
+				assignedPoints++;
+			}
+		}
+		if(assignedPoints!=0)
+			for (int i = tid; i < tid + dim; i++)
+				d_centroids[i] /= assignedPoints;
+	}*/
+}
+
+__global__ void k_means_cuda_device_assign_centroids(float* d_dataPoints, float* d_centroids, int length, int dim, int k,bool* d_convergenceCheck) {
+	int tid = blockIdx.x * blockDim.x + threadIdx.x;
+	tid *= (dim + 1);
+	if (tid < length * (dim+1)) {
+		 convergenceCheck = true;
+		 int newCentroid = calculateCentroid_device(d_dataPoints,tid, dim, k, d_centroids);
+		 if (d_dataPoints[tid + dim] != newCentroid) {
+			 convergenceCheck = false;
+			 d_dataPoints[tid + dim] = newCentroid;
+		 }
+	}
+	__syncthreads();
+	if (tid == 0)
+		d_convergenceCheck[0] = convergenceCheck;
 }
 
 void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
@@ -55,8 +134,9 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	// Randomizer
 	std::uniform_real_distribution<> distrib(0, 10);
 
-	float* h_dataPoints =new float[length*dim];
+	float* h_dataPoints =new float[length*(dim+1)];
 	float* h_centroids=new float[k*dim];
+	int* h_assignedPoints = new int[k];
 
 	// 1. Choose the number of clusters(K) and obtain the data points
 	if (k <= 0) {
@@ -67,6 +147,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	float** centroids = new float* [k];
 	for (int i = 0; i < k; i++) {
 		centroids[i] = new float[dim];
+		h_assignedPoints[i] = 0;
 
 		// rand init
 		for (int j = 0; j < dim; j++) {
@@ -74,33 +155,90 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		}
 	}
 
-	linealizer(h_dataPoints, dataPoints,length,dim);
-	//linealizer(h_centroids, centroids, k, dim);
+	linealizer(h_dataPoints, dataPoints,length,dim+1);
+	linealizer(h_centroids, centroids, k, dim);
 
 	float* d_dataPoints;
+
 	float* d_centroids;
 
-	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(float) * length * dim));
-	/*HANDLE_ERROR(cudaMalloc((void**)&d_centroids, sizeof(float) * k * dim));
+	bool* d_convergenceCheck;
 
-	HANDLE_ERROR(cudaMemcpy(d_dataPoints, h_dataPoints,sizeof(float) * length * dim, cudaMemcpyHostToDevice));
+	int* d_assignedPoints;
+
+	int NumBlocks;
+
+	bool convergence = false;
+
+	bool *convergenceCheck=new bool[1];
+
+	convergenceCheck[0] = true;
+
+	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(float) * length * (dim+1)));
+	HANDLE_ERROR(cudaMalloc((void**)&d_centroids, sizeof(float) * k * dim));
+	HANDLE_ERROR(cudaMalloc((void**)&d_assignedPoints, sizeof(int) * k ));
+	HANDLE_ERROR(cudaMalloc((void**)&d_convergenceCheck, sizeof(bool)));
+
+	HANDLE_ERROR(cudaMemcpy(d_dataPoints, h_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(d_centroids, h_centroids, sizeof(float) * k * dim, cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(d_convergenceCheck, convergenceCheck, sizeof(bool), cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(d_assignedPoints, h_assignedPoints, sizeof(int)*k, cudaMemcpyHostToDevice));
 
-	int NumBlocks = length / 256;
+	while (!convergence) {
 
-	if (length % 256 != 0) {
-		NumBlocks += 1;
+		convergenceCheck[0] = true;
+
+		NumBlocks = length / 256;
+
+		if (length % 256 != 0) {
+			NumBlocks += 1;
+		}
+
+		k_means_cuda_device_assign_centroids << < NumBlocks, 256 >> > (d_dataPoints, d_centroids, length, dim, k,d_convergenceCheck);
+
+		HANDLE_ERROR(cudaMemcpy(convergenceCheck, d_convergenceCheck, sizeof(bool), cudaMemcpyDeviceToHost));
+
+		convergence = convergenceCheck[0];
+
+		/*NumBlocks = k / 256;
+
+		if (k % 256 != 0) {
+			NumBlocks += 1;
+		}*/
+
+		k_means_cuda_device_update_centroids << < NumBlocks, 256,k*(dim+1)*sizeof(float)+k*sizeof(int)>> > (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k);
+
+		convergence = true;
+
 	}
 
-	k_means_cuda_device <<< NumBlocks, 256 >>> (d_dataPoints, d_centroids, length, dim, k);
+	HANDLE_ERROR(cudaMemcpy(h_dataPoints, d_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyDeviceToHost));
+	HANDLE_ERROR(cudaMemcpy(h_centroids, d_centroids, sizeof(float) * k * dim, cudaMemcpyDeviceToHost));
 
-	//for (int i = 0; i < length; i++)
-		//	printf("%f\n", dataPoints[i][dim]);
-		*/
+	/*printf("DATAPOINTS\n");
+	int count = 1;
+	for (int i = 0; i < length * (dim + 1); i++) {
+		printf("%f ", h_dataPoints[i]);
+		if (count == (dim+1)) {
+			printf("\n");
+			count = 0;
+		}
+		count++;
+	}
+	printf("CENTROIDS\n");
+	for (int i = 0; i < k * dim; i++) {
+		printf("%f ", h_centroids[i]);
+		if (count == dim) {
+			printf("\n");
+			count = 0;
+		}
+		count++;
+	}*/
+
 	cudaFree(d_dataPoints);
-	//cudaFree(d_centroids);
-	delete h_dataPoints;
-	delete h_centroids;
+	cudaFree(d_centroids);
+	free(h_dataPoints);
+	free(h_centroids);
 
 }
 
