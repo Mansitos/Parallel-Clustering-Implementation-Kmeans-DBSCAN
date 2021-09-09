@@ -8,6 +8,7 @@ Mansi Andrea & Christian Cagnoni
 #include <random>
 #include <iostream>
 #include "utils.h"
+#include <omp.h>
 
 int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 float euclideanDistance(float* dataPoint, float* centroid, int dim);
@@ -29,7 +30,6 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 
 	//2. Place the centroids c_1, c_2, .....c_k randomly
 	float** centroids = new float*[k];
-	#pragma omp parallel for if(useParallelism)
 	for (int i = 0; i < k; i++) {
 		centroids[i] = new float[dim];
 
@@ -50,14 +50,10 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 			// find the nearest centroid(c_1, c_2 ..c_k)
 			// assign the point to that cluster
 			int newCentroid = calculateCentroid(dataPoints[i], dim, k, centroids);
-
 			// When at least one centroid changed: convergence is not reached!
 			if (dataPoints[i][dim] != newCentroid) {
-				#pragma omp critical
-				{
-					convergenceCheck = false;
-					dataPoints[i][dim] = newCentroid;
-				}
+				convergenceCheck = false;
+				dataPoints[i][dim] = newCentroid;
 			}
 		}
 
@@ -86,11 +82,13 @@ int calculateCentroid(float* dataPoint, int dim, int k, float** centroids) {
 		float distance = euclideanDistance(dataPoint, centroids[i], dim);
 		if (firstIteration) {
 			firstIteration = false;
+			nearestCentroidIndex = i;
+			minDistance = distance;
 		}
 		else if (distance < minDistance) {
 			nearestCentroidIndex = i;
+			minDistance = distance;
 		}
-		minDistance = distance;
 	}
 	return nearestCentroidIndex;
 }
@@ -123,8 +121,8 @@ Update the centroid coordinates after a cycle of points-assignements-to-centroid
 void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k) {
 	for (int centroid = 0; centroid < k; centroid++) {
 
-		for (int k = 0; k < dim; k++) {
-			centroids[centroid][k] = 0;	// resetting actual centroid values
+		for (int j = 0; j < dim; j++) {
+			centroids[centroid][j] = 0;	// resetting actual centroid values
 		}
 
 		int assignedPoints = 0;	// counters to points assigned to actual centroid

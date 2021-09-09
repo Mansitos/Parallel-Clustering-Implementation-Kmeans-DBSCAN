@@ -47,8 +47,8 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 				b_dataPoints[i] = dataPoints[i][dimOfPoints];
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
 			for (int i = 0; i < numberOfPoints; i++)
-				if (b_dataPoints[i] != dataPoints[i][dimOfPoints]){}
-					//printf("ERROR: parallel (openmp) and serial versions of kmeans has produced a different result \n");
+				if (b_dataPoints[i] != dataPoints[i][dimOfPoints])
+					printf("ERROR: parallel (openmp) and serial versions of kmeans has produced a different result \n");
 			free(b_dataPoints);
 		} else if (algorithm == "kmeans_cuda") {
 			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
@@ -59,8 +59,7 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
 			for (int i = 0; i < numberOfPoints; i++)
 				if (b_dataPoints[i] != dataPoints[i][dimOfPoints])
-					printf("ERROR: parallel (openmp) and serial versions of kmeans has produced a different result \n");
-			free(b_dataPoints);
+					printf("ERROR: parallel (cuda) and serial versions of kmeans has produced a different result \n");
 		} else if (algorithm == "kmeans_cuda_openmp") {
 
 		} else if (algorithm == "dbscan") {
@@ -107,11 +106,11 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 10;
+	int reps = 1;//10;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghts = 5;
-	int lenghtsToTest[nLenghts] = {10, 50, 100, 1000, 10000};
+	const int nLenghts = 9;
+	int lenghtsToTest[nLenghts] = {10, 50, 100, 1000, 10000,100000,500000,1000000,10000000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
 	const int nDims = 1;
@@ -119,8 +118,8 @@ void runTestSession(bool saveToCsv = false) {
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 6;
-	string algorithmsToTest[] = {"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 1;
+	string algorithmsToTest[] = { "kmeans_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	ofstream file("tests.csv");
 	if (saveToCsv) {
@@ -134,11 +133,11 @@ void runTestSession(bool saveToCsv = false) {
 	std::mt19937 seed(rd()); // Standard mersenne_twister_engine seeded with rd()
 
 	// another for with "list of algs to test"
-	for (int alg = 0; alg < nAlgs; alg++) {
+	for (int alg = 0; alg < 1; alg++) {//nAlgs
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
 
 		for (int dim = 0; dim < nDims; dim++) {
-			for (int length = 0; length < 4; length++) {//nLenghts
+			for (int length = 0; length < nLenghts; length++) {
 				chrono::duration<double> meanTime = runTest(lenghtsToTest[length], dimensionsToTest[dim], algorithmsToTest[alg], reps,seed);
 				
 				testIndex++;
@@ -170,8 +169,4 @@ void runTestSession(bool saveToCsv = false) {
 		}
 	}
 }
-
-//void clearClusterColumn() {
-
-//}
 
