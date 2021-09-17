@@ -76,9 +76,22 @@ void linealizer(float* output, float** input, int length, int dim) {
 			output[index++] = input[i][j];
 }
 
+void linealizer(double* output, float** input, int length, int dim) {
+	int index = 0;
+	for (int i = 0; i < length; i++)
+		for (int j = 0; j < dim; j++)
+			output[index++] = input[i][j];
+}
+
 void delinealizer(float** output, float* input, int length, int dim) {
 	int index = 0;
 	for (int i = dim; i < length; i += (dim+1))
+		output[index++][dim] = input[i];
+}
+
+void delinealizer(float** output, double* input, int length, int dim) {
+	int index = 0;
+	for (int i = dim; i < length; i += (dim + 1))
 		output[index++][dim] = input[i];
 }
 

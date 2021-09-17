@@ -8,13 +8,6 @@ Mansi Andrea & Christian Cagnoni
 #include <random>
 #include <iostream>
 
-// Randomizer
-const float minRange = 0;	// min value for coordinates
-const float maxRange = 10;	// max value for coordinates
-std::random_device rd;  // Will be used to obtain a seed for the random number engine
-std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
-std::uniform_real_distribution<> distrib(minRange,maxRange);
-
 static void initializeDataPoints(float** dataPoints, int length, int dim);
 float** generateRandomInput(int numberOfPoints, int dimOfPoints);
 
@@ -41,6 +34,13 @@ float** generateRandomInput(int numberOfPoints, int dimOfPoints) {
 Called by generateRandomInput: generates a random coordinate value for each dataPoint.
 */
 void initializeDataPoints(float** dataPoints, int length, int dim) {
+	// Randomizer
+	const int minRange = 0;	// min value for coordinates
+	const int maxRange = length;	// max value for coordinates
+	std::random_device rd;  // Will be used to obtain a seed for the random number engine
+	std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
+	std::uniform_real_distribution<> distrib(minRange, maxRange);
+
 	for (int i = 0; i < length; i++) {
 		for (int j = 0; j < dim; j++) {
 			dataPoints[i][j] = distrib(gen);

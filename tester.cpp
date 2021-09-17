@@ -30,29 +30,114 @@ Run a test for the specified algorithm.
 */
 chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string algorithm, int repetitions, std::mt19937 seed) {
 	float** dataPoints = generateRandomInput(numberOfPoints, dimOfPoints);
-
 	chrono::duration<double> time = std::chrono::seconds(0);
 
 	for (int rep = 0; rep < repetitions; rep++) {
 		auto start = std::chrono::high_resolution_clock::now();
+		auto finish = std::chrono::high_resolution_clock::now();
 		if (algorithm == "kmeans") {
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			finish = std::chrono::high_resolution_clock::now();
 		} else if (algorithm == "kmeans_openmp") {
 			k_means(dataPoints, numberOfPoints, dimOfPoints, true, 2, seed);
+			finish = std::chrono::high_resolution_clock::now();
+			int* b = new int[numberOfPoints];
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				b[i] = dataPoints[i][dimOfPoints];
+			}
+			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			int treshold = 1;
+			int err = (numberOfPoints * treshold) / 100;
+			int check = 0;
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				if (b[i] != (int)(dataPoints[i][dimOfPoints])) {
+					if (++check > err) {
+						printf("ERROR: serial and parallel (openmp) version of kmeans have several results\n");
+						break;
+					}
+				}
+			}
+			if (check <= err)
+				printf("Total errors (less than 1%c) :%d\n", (char)37,check);
 		} else if (algorithm == "kmeans_cuda") {
 			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			finish = std::chrono::high_resolution_clock::now();
+			int* b=new int[numberOfPoints];
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				b[i] = dataPoints[i][dimOfPoints];
+			}
+			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			int treshold = 1;
+			int err = (numberOfPoints * treshold) / 100;
+			int check = 0;
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				if (b[i] != (int)(dataPoints[i][dimOfPoints])) {
+					if (++check > err) {
+						printf("ERROR: serial and parallel (cuda) version of kmeans have several results\n");
+						break;
+					}
+				}
+			}
+			if (check <= err)
+				printf("Total errors (less than 1%c) :%d\n", (char)37, check);
 		} else if (algorithm == "kmeans_cuda_openmp") {
 
 		} else if (algorithm == "dbscan") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
+			finish = std::chrono::high_resolution_clock::now();
 		} else if (algorithm == "dbscan_openmp") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, true, seed);
+			finish = std::chrono::high_resolution_clock::now();
+			int* b = new int[numberOfPoints];
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				b[i] = dataPoints[i][dimOfPoints];
+			}
+			dbscan(dataPoints, numberOfPoints, dimOfPoints, false,seed);
+			int treshold = 1;
+			int err = (numberOfPoints * treshold) / 100;
+			int check = 0;
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				if (b[i] != (int)(dataPoints[i][dimOfPoints])) {
+					if (++check > err) {
+						printf("ERROR: serial and parallel (openmp) version of dbscan have several results\n");
+						break;
+					}
+				}
+			}
+			if (check <= err)
+				printf("Total errors (less than 1%c) :%d\n", (char)37, check);
 		} else if (algorithm == "dbscan_cuda") {
 			dbscan_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, seed);
+			finish = std::chrono::high_resolution_clock::now();
+			int* b = new int[numberOfPoints];
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				b[i] = dataPoints[i][dimOfPoints];
+			}
+			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
+			int treshold = 1;
+			int err = (numberOfPoints * treshold) / 100;
+			int check = 0;
+			#pragma omp parallel for
+			for (int i = 0; i < numberOfPoints; i++) {
+				if (b[i] != (int)(dataPoints[i][dimOfPoints])) {
+					if (++check > err) {
+						printf("ERROR: serial and parallel (cuda) version of dbscan have several results\n");
+						break;
+					}
+				}
+			}
+			if (check <= err)
+				printf("Total errors (less than 1%c) :%d\n", (char)37, check);
 		} else if (algorithm == "dbscan_cuda_openmp") {
 
 		}
-		auto finish = std::chrono::high_resolution_clock::now();
 		chrono::duration<double> elapsed = finish - start;
 		time += elapsed;
 		clearClusterColumn(dataPoints, numberOfPoints, dimOfPoints);
@@ -67,7 +152,7 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 10;
+	int reps = 1;//10;
 
 	// the lenthts (number of points) that have to be tested
 	const int nLenghts = 9;
@@ -79,8 +164,8 @@ void runTestSession(bool saveToCsv = false) {
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 6;
-	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 3;//6;
+	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	ofstream file("tests.txt");
 	if (saveToCsv) {
@@ -98,15 +183,15 @@ void runTestSession(bool saveToCsv = false) {
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
 
 		for (int dim = 0; dim < nDims; dim++) {
-			for (int length = 0; length < nLenghts; length++) {
+			for (int length = 0; length < 5; length++) {
 				chrono::duration<double> meanTime = runTest(lenghtsToTest[length], dimensionsToTest[dim], algorithmsToTest[alg], reps,seed);
 				
 				testIndex++;
 
-				printf("--------------------------------------------\n");
 				printf("Reps: %d\n", reps);
 				printf("Elements: %d of dim: %d\n", lenghtsToTest[length], dimensionsToTest[dim]);
 				std::cout << "Mean time: " << meanTime.count() << "s\n";
+				printf("--------------------------------------------\n");
 
 				if (saveToCsv) {
 					string newline = "";

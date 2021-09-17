@@ -51,7 +51,7 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 			// assign the point to that cluster
 			int newCentroid = calculateCentroid(dataPoints[i], dim, k, centroids);
 			// When at least one centroid changed: convergence is not reached!
-			if (dataPoints[i][dim] != newCentroid) {
+			if ((int)(dataPoints[i][dim]) != newCentroid) {
 				convergenceCheck = false;
 				dataPoints[i][dim] = newCentroid;
 			}
@@ -62,6 +62,8 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 		//5. for each cluster j = 1..k
 		//- new centroid = mean of all points assigned to that cluster
 		updateCentroids(dataPoints, length, dim, centroids, k);
+		//printf("Final Centroids:\n");
+		//printCentroids(centroids, k, dim);
 	}
 
 	//6. End (convergence reached)
@@ -72,6 +74,7 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 	printf("Final Centroids:\n");
 	printCentroids(centroids, k, dim);
 	*/
+
 }
 
 int calculateCentroid(float* dataPoint, int dim, int k, float** centroids) {

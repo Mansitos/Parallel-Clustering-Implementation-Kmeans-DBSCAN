@@ -22,9 +22,8 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim);
 
 void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
-	std::uniform_real_distribution<> distrib(0, sqrt(length) * 2);
+	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2)/10);
 	float count = 0;
-	bool add = false;
 	const float minPts = 2;
 	float eps = distrib(seed);
 	for (int point = 0; point < length; point++) {
@@ -51,7 +50,6 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 				unionVectors(&remainder, useParallelism, neighboursChild);
 		}
 	}
-
 }
 
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
