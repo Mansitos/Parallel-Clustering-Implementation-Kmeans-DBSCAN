@@ -20,7 +20,6 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 	std::uniform_real_distribution<> distrib(0, 10);
 
 	// Local variables
-	//const int k = 3;
 	bool convergence = false;
 
 	// 1. Choose the number of clusters(K) and obtain the data points
@@ -67,14 +66,6 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 	}
 
 	//6. End (convergence reached)
-	/*
-	printf("Points:\n");
-	printDataPoints(dataPoints, length, dim);
-	printf("\n");
-	printf("Final Centroids:\n");
-	printCentroids(centroids, k, dim);
-	*/
-
 }
 
 int calculateCentroid(float* dataPoint, int dim, int k, float** centroids) {

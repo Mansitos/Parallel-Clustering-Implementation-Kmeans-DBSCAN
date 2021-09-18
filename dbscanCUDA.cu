@@ -19,6 +19,7 @@ static void HandleError(cudaError_t err, const char* file, int line);
 */
 __global__ void calculateDistancesCUDA(float* d_dataPoints, int core, int point, int dim, float* distance) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid == 10015) { printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); }
 	if (tid >= dim)
 		return;
 
@@ -47,10 +48,7 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	if (tid >= length * (dim + 1))
 		return;
 
-	int TPB = 32*(length/32);	 // Threads x blocks
-	if (length%32 != 0){
-		TPB += 32;
-	}
+	int TPB = (length + length%32);	 // Threads x blocks
 
 	// array of calculated distances for each point
 	float* distance = (float*)malloc(sizeof(float));
@@ -228,7 +226,7 @@ Main DBSCAN call. Host initialization.
 void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
 
 	// Randomizer
-	std::uniform_real_distribution<> distrib(0, sqrt(length) * 2);
+	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2) / 10);
 
 	float clusterCounter = 0;
 	const float minPts = 2;		// min number of points to create a new cluster
@@ -251,22 +249,10 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 	HANDLE_ERROR(cudaMemcpy(d_dataPoints, h_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyHostToDevice));
 
 	// Main DBSCAN call
-	dbscan_cuda_device << <1,1 >> > (d_dataPoints, length, dim, clusterCounter ,minPts,eps);
+	dbscan_cuda_device <<<1,1>>> (d_dataPoints, length, dim, clusterCounter, minPts, eps);
 
 	// copy of device linearized array (result) to host
 	HANDLE_ERROR(cudaMemcpy(h_dataPoints, d_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyDeviceToHost));
-
-	// TODO REMOVE
-	/*printf("DATAPOINTS\n");
-	int counter = 1;
-	for (int i = 0; i < length * (dim + 1); i++) {
-		printf("%f ", h_dataPoints[i]);
-		if (counter == (dim+1)) {
-			printf("\n");
-			counter = 0;
-		}
-		counter++;
-	}*/
 
 	delinealizer(dataPoints,h_dataPoints,length*(dim+1),dim);
 
