@@ -14,22 +14,16 @@
 
 static void HandleError(cudaError_t err, const char* file, int line);
 
+__device__ unsigned int countBD = 0;
+
 /*
 
 */
 __global__ void calculateDistancesCUDA(float* d_dataPoints, int core, int point, int dim, float* distance) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
-	if (tid == 10015) { printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); }
 	if (tid >= dim)
 		return;
-
 	atomicAdd(&distance[0], pow(d_dataPoints[point+tid] - d_dataPoints[core+tid], 2));
-	__syncthreads();
-
-	if (tid == 0)
-		distance[0] = sqrt(distance[0]);
-
-	__syncthreads();
 }
 
 /*
@@ -48,18 +42,24 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	if (tid >= length * (dim + 1))
 		return;
 
-	int TPB = (length + length%32);	 // Threads x blocks
-
 	// array of calculated distances for each point
 	float* distance = (float*)malloc(sizeof(float));
 	// initialization
 	distance[0] = 0;
 
-	calculateDistancesCUDA << <1, TPB >> >(d_dataPoints, index, tid, dim, distance);
+	int NumBlocks = dim / 32;
+	if (dim % 32 != 0)
+		NumBlocks++;
+
+	calculateDistancesCUDA << <NumBlocks, 32 >> >(d_dataPoints, index, tid, dim, distance);
 	__syncthreads();
 
 	if (threadIdx.x == 0)
 		cudaDeviceSynchronize();
+	__syncthreads();
+
+	distance[0] = sqrt(distance[0]);
+
 	__syncthreads();
 
 	if (distance[0] <= eps) {
@@ -75,7 +75,7 @@ Remove actual point from linearized array
 	@index:
 	@neighCount:
 */
-__global__ void neighboursDifference(float* neighbours, int index, int* neighCount) {
+__global__ void neighboursDifference(float* neighbours, int index, int* neighCount,int NumBlocks) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= neighCount[0])
 		return;
@@ -84,13 +84,20 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 		atomicAdd(&index, tid);
 	}
 	__syncthreads();
-
-	for(int i=index+1; i<neighCount[0]; i++)
-		neighbours[i - 1] = neighbours[i];
+	if (threadIdx.x == 0)
+		atomicAdd(&countBD, 1);
 	__syncthreads();
-
-	if (tid == 0)
+	if (tid == 0) {
+		while (countBD != NumBlocks)
+		{
+			printf("*\n");
+		}
+		printf("ok\n");
+		countBD = 0;
+		for (int i = index + 1; i < neighCount[0]; i++)
+			neighbours[i - 1] = neighbours[i];
 		neighCount[0]--;
+	}
 }
 
 /*
@@ -152,9 +159,10 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		// number of neighbours
 		int* neighCount = (int*)malloc(sizeof(int));		// TODO: vedere se si può fare senza array
 		neighCount[0] = 0;
-
+		printf("init first neigh\n");
 		findNeighbours<<<NumBlocks,256>>>(d_dataPoints, neighbours, i, eps, length, dim, neighCount);
 		cudaDeviceSynchronize();
+		printf("first neigh\n");
 
 		// if <minPts neighbours are found; assign NOISE to actual point and skip to next point
 		if (neighCount[0]<minPts) {
@@ -167,14 +175,16 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		clusterCounter++;
 		d_dataPoints[i+dim] = clusterCounter;
 
-		int TPB = 32*(neighCount[0]/32);	 // Threads x blocks
-		if (neighCount[0]%32 != 0){
-			TPB += 32;
+		NumBlocks = neighCount[0] / 256;
+		int tmp = neighCount[0];
+		if (tmp % 256 != 0) {
+			NumBlocks += 1;
 		}
-
+		printf("init dif\n");
 		// remove actual point from linearized array
-		neighboursDifference <<<1,TPB>>> (neighbours, i, neighCount);
+		neighboursDifference <<<NumBlocks,256>>> (neighbours, i, neighCount,NumBlocks);
 		cudaDeviceSynchronize();
+		printf("dif\n");
 
 		// iterate through neighbours
 		for (int j = 0; j < neighCount[0]; j++) {
@@ -189,21 +199,31 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 			int* neighCountChild = (int*)malloc(sizeof(int));
 			neighCountChild[0] = 0;
 
+			NumBlocks = length / 256;
+			if (length % 256 != 0) {
+				NumBlocks += 1;
+			}
+
+			printf("init second neigh\n");
 			findNeighbours <<<NumBlocks, 256>>>(d_dataPoints, neighboursChild, neighbours[j], eps, length, dim, neighCountChild);
 			cudaDeviceSynchronize();
+			printf("second neigh\n");
 
-			TPB = 32*(neighCountChild[0]/32);	 // Threads x blocks
-			if (neighCountChild[0]%32 != 0){
-				TPB += 32;
-			}
+			NumBlocks = neighboursChild[0] / 256;
+			tmp = neighboursChild[0];
+			if (tmp % 256 != 0)
+				NumBlocks++;
+
 			// if >= minPts neighbours are found...
 			if (neighCountChild[0] >= minPts){
-				int* index = (int*)malloc(sizeof(int)*(length-1));
+				int* index = (int*)malloc(sizeof(int)*length);
 				int* point = (int*)malloc(sizeof(int)); // TODO: change names.
 				point[0] = 0;
+				printf("init union\n");
 				// Add found new neighbour's neighbours to neighbours list 
-				unionVectors<<<1,TPB>>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point);
+				unionVectors<<<NumBlocks,256>>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point);
 				cudaDeviceSynchronize();
+				printf("union\n");
 				free(index);
 				free(point);
 			}
@@ -237,11 +257,6 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 	linealizer(h_dataPoints, dataPoints, length, dim + 1);
 
 	float* d_dataPoints;
-
-	int NumBlocks = length/256;
-	if (length % 256 != 0) {
-		NumBlocks += 1;
-	}
 
 	// device allocation for linearized array
 	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(float) * length * (dim + 1)));
