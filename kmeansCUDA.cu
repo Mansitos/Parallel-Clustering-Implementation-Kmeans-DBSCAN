@@ -10,14 +10,13 @@
 #define HANDLE_ERROR(err) (HandleError(err, __FILE__, __LINE__))
 
 static void HandleError(cudaError_t err, const char* file, int line);
-
 __device__ float euclideanDistance(float* dataPoint, float* centroid, int dim);
-
 __device__ int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 
 __device__ bool convergenceCheck = true;
 __device__ unsigned int countB = 0;
 
+// Atomic add implementation for double
 __device__ double atomicAddDouble(double* address, double val)
 {
 	unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -72,6 +71,14 @@ __device__ bool AtomicBool(bool* address, bool val)
 	return oldValue;
 }
 
+/*
+Function for euclidean distance calculation between 2 given points
+	@dataPoint: the list of points (1st points)
+	@tid: the index of the first point
+	@centroid: the list of centroids (2nd points)
+	@index: the index of the second points
+	@dim: dimension of points: 3D, 4D, etc.
+*/
 __device__ double euclideanDistance_device(double* dataPoint, int tid, double* centroid, int index, int dim) {
 	double sum = 0;
 	for (int i = 0; i < dim; i++) {
@@ -81,6 +88,14 @@ __device__ double euclideanDistance_device(double* dataPoint, int tid, double* c
 	return distance;
 }
 
+/*
+Function for assigning a centroid to a given point. Iterates each centroid and check which one is the closest one.
+	@dataPoint: the list of points
+	@tid: the index of the point for which centroid have to be calculated
+	@dim: dimension of points: 3D etc.
+	@k: number of centroids
+	@centroids: list of centroids.
+*/
 __device__ int calculateCentroid_device(double* dataPoint, int tid, int dim, int k, double* centroids) {
 	int nearestCentroidIndex = dataPoint[tid + dim];
 	bool firstIteration = true;
@@ -100,6 +115,13 @@ __device__ int calculateCentroid_device(double* dataPoint, int tid, int dim, int
 	return nearestCentroidIndex;
 }
 
+/*
+CUDA Kernel for parallel computing of updated centroids coordinates. (parallel division)
+	@d_centroids: the list of centroids (device side)
+	@assignedPoints: the amount of assigned points to that cluster
+	@dim: dimension of points
+	@index: the index of the cluster to update
+*/
 __global__ void computeCentroids(double* d_centroids, int assignedPoint, int dim, int index) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid >= dim)
@@ -107,6 +129,16 @@ __global__ void computeCentroids(double* d_centroids, int assignedPoint, int dim
 	d_centroids[index + tid] /= assignedPoint;
 }
 
+/*
+CUDA Kernel for centroids update.
+	@d_dataPoints: the list of points (device side)
+	@d_centroids: the list of centroids (device side)
+	@assignedPoints: the amount of assigned points to that cluster
+	@dim: dimension of points
+	@lenght: amount of points
+	@k: number of centroids
+	@NumBlocks: the number of blocks which are running this kernel
+*/
 __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, double* d_centroids, int* assignedPoints, int length, int dim, int k, int NumBlocks) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid >= length * (dim + 1))
@@ -122,7 +154,6 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 
 	if (threadIdx.x == 0)
 		atomicAdd(&countB, 1);
-
 	__syncthreads();
 
 	extern __shared__ double s[];
@@ -137,19 +168,20 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	}
 	__syncthreads();
 
-	if (tid % (dim + 1) == 0) {//prima cordinata
-		atomicAddDouble(&b_centroids[((int)d_dataPoints[tid + dim] * dim)], d_dataPoints[tid]);
+	// Sum of point's coordinates for each cluster
+	int clusterIndex = ((int)(tid / (dim + 1))) * (dim + 1) + dim;
+	int coordOffest = tid % (dim + 1);
+
+	if (tid != clusterIndex) {
+		atomicAddDouble(&b_centroids[(int)d_dataPoints[clusterIndex] * dim + coordOffest], d_dataPoints[tid]);
 	}
-	else if ((tid + 1) % (dim + 1) != 0) {//seconda
-		atomicAddDouble(&b_centroids[((int)d_dataPoints[tid + (tid % (dim + 1))] * dim) + (tid % (dim + 1))], d_dataPoints[tid]);
-	}
-	else {//cluster
+	else {
 		atomicAdd(&b_assignedPoints[(int)d_dataPoints[tid]], 1);
 	}
 
 	__syncthreads();
 
-	if (threadIdx.x <k)
+	if (threadIdx.x < k)
 		atomicAdd(&assignedPoints[threadIdx.x], b_assignedPoints[threadIdx.x]);
 	mul = 0;
 	while (threadIdx.x + mul * 256 < k * dim) {
@@ -166,52 +198,40 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	__syncthreads();
 
 	if (tmp < k * dim) {
-		while (countB != 2 * NumBlocks) {
+		while (countB != 2 * NumBlocks) { // busy wait
 		}
 		if (assignedPoints[tmp / dim] != 0) {
 			int NumBlocksChild = dim / 256;
 			if (dim % 256 != 0)
 				NumBlocksChild++;
-			if (tmp == 0) {
-				int count = 1;
-				printf("CENTROIDS\n");
-				for (int i = 0; i < k * dim; i++) {
-					printf("%f ", d_centroids[i]);
-					if (count == dim) {
-						printf("\n");
-						count = 0;
-					}
-					count++;
-				}
-			}
-			computeCentroids << <NumBlocksChild,256 >> > (d_centroids, assignedPoints[tmp / dim], dim,tmp);
+
+			computeCentroids <<<NumBlocksChild,256>>> (d_centroids, assignedPoints[tmp / dim], dim,tmp);
 			cudaDeviceSynchronize();
-			if (tmp == 0) {
-				int count = 1;
-				printf("CENTROIDS\n");
-				for (int i = 0; i < k * dim; i++) {
-					printf("%f ", d_centroids[i]);
-					if (count == dim) {
-						printf("\n");
-						count = 0;
-					}
-					count++;
-				}
-			}
 		}
 		if(tmp==0)
 			countB = 0;
 	}
 }
 
-
+/*
+For each point calculate the new centroid and assign it.
+	@d_dataPoints: the list of points (device side)
+	@d_centroids: the list of centroids (device side)
+	@dim: dimension of points
+	@length: amount of points
+	@k: number of centroids
+	@d_convergenceCheck: pointer of the convergence flag. If true the algorithm stops.
+	@NumBlocks: the number of blocks which are running this kernel
+*/
 __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, double* d_centroids, int length, int dim, int k, bool* d_convergenceCheck, int NumBlocks) {
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	tid *= (dim + 1);
 	if (tid >= length * (dim + 1))
 		return;
 	int newCentroid = calculateCentroid_device(d_dataPoints, tid, dim, k, d_centroids);
+
 	__syncthreads();
+
 	if ((int)(d_dataPoints[tid + dim]) != newCentroid) {
 		AtomicBool(&convergenceCheck, false);
 		d_dataPoints[tid + dim] = newCentroid;
@@ -222,6 +242,8 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 		atomicAdd(&countB, 1);
 
 	__syncthreads();
+
+	// convergence check
 	if (tid == 0) {
 		while (countB != NumBlocks) {
 		}
@@ -260,19 +282,15 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	linealizer(h_centroids, centroids, k, dim);
 
 	double* d_dataPoints;
-
 	double* d_centroids;
 
 	bool* d_convergenceCheck;
-
 	int* d_assignedPoints;
 
 	int NumBlocks;
 
 	bool convergence = false;
-
 	bool* convergenceCheck = new bool[1];
-
 	convergenceCheck[0] = true;
 
 	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(double) * length * (dim + 1)));
@@ -288,7 +306,6 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	while (!convergence) {
 
 		convergenceCheck[0] = true;
-
 		NumBlocks = length / 256;
 
 		if (length % 256 != 0) {
@@ -301,7 +318,6 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		HANDLE_ERROR(cudaMemcpy(convergenceCheck, d_convergenceCheck, sizeof(bool), cudaMemcpyDeviceToHost));
 
 		convergence = convergenceCheck[0];
-
 		NumBlocks = (length * (dim + 1)) / 256;
 
 		if ((length * (dim + 1)) % 256 != 0) {
@@ -316,26 +332,6 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	HANDLE_ERROR(cudaMemcpy(h_dataPoints, d_dataPoints, sizeof(double) * length * (dim + 1), cudaMemcpyDeviceToHost));
 	HANDLE_ERROR(cudaMemcpy(h_centroids, d_centroids, sizeof(double) * k * dim, cudaMemcpyDeviceToHost));
 
-	/*printf("DATAPOINTS\n");
-	int count = 1;
-	for (int i = 0; i < length * (dim + 1); i++) {
-		printf("%f ", h_dataPoints[i]);
-		if (count == (dim+1)) {
-			printf("\n");
-			count = 0;
-		}
-		count++;
-	}
-	printf("CENTROIDS\n");
-	for (int i = 0; i < k * dim; i++) {
-		printf("%f ", h_centroids[i]);
-		if (count == dim) {
-			printf("\n");
-			count = 0;
-		}
-		count++;
-	}*/
-
 	delinealizer(dataPoints, h_dataPoints, length * (dim + 1), dim);
 
 	cudaFree(d_dataPoints);
@@ -346,7 +342,6 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	free(h_centroids);
 	free(h_assignedPoints);
 	free(convergenceCheck);
-
 }
 
 /*
