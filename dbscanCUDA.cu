@@ -42,14 +42,14 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	if (tid >= length * (dim + 1))
 		return;
 
+	int NumBlocks = dim / 32;
+	if (dim % 32 != 0)
+		NumBlocks++;
+
 	// array of calculated distances for each point
 	float* distance = (float*)malloc(sizeof(float));
 	// initialization
 	distance[0] = 0;
-
-	int NumBlocks = dim / 32;
-	if (dim % 32 != 0)
-		NumBlocks++;
 
 	calculateDistancesCUDA << <NumBlocks, 32 >> >(d_dataPoints, index, tid, dim, distance);
 	__syncthreads();
@@ -79,7 +79,7 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= neighCount[0])
 		return;
-	if (neighbours[tid] == index) {
+	if ((int)(neighbours[tid]) == index) {
 		index = 0;
 		atomicAdd(&index, tid);
 	}
@@ -90,14 +90,19 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 	if (tid == 0) {
 		while (countBD != NumBlocks)
 		{
-			printf("*\n");
 		}
-		printf("ok\n");
 		countBD = 0;
 		for (int i = index + 1; i < neighCount[0]; i++)
 			neighbours[i - 1] = neighbours[i];
 		neighCount[0]--;
 	}
+}
+
+__global__ void unionVectorsSupport(float* neighbours, float* neighboursChild, int* neighCount, int* index, int* point) {
+	int tid = blockDim.x * blockIdx.x + threadIdx.x;
+	if (tid >= point[0])
+		return;
+	neighbours[atomicAdd(&neighCount[0], 1)] = neighboursChild[index[tid]];
 }
 
 /*
@@ -109,27 +114,35 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 	@index: array of positions of new neighbours
 	@point: length of index
 */
-__global__ void unionVectors(float* neighbours, float* neighboursChild, int* neighCount, int* neighCountChild, int* index, int* point) {
+__global__ void unionVectors(float* neighbours, float* neighboursChild, int* neighCount, int* neighCountChild, int* index, int* point,int NumBlocks) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= neighCountChild[0])
 		return;
 	int t = neighCount[0];
 	bool check = false;
 	for (int i = 0; i < t; i++) {
-		if (neighbours[i] == neighboursChild[tid]) {
+		if ((int)(neighbours[i]) == (int)(neighboursChild[tid])) {
 			check = true;
 			break;
 		}
 	}
 
+	if (threadIdx.x == 0)
+		atomicAdd(&countBD, 1);
+
 	if (!check) // if not found...
 		index[atomicAdd(&point[0], 1)] = tid;
 	__syncthreads();
 
-	if (tid >= point[0])
-		return;
-
-	neighbours[atomicAdd(&neighCount[0], 1)] = neighboursChild[index[tid]];	
+	if (tid == 0) {
+		while (countBD != NumBlocks) {
+		}
+		countBD = 0;
+		int NumBlocksSupport = point[0] / 256;
+		if (point[0] % 256 != 0)
+			NumBlocksSupport++;
+		unionVectorsSupport << <NumBlocksSupport,256>> > (neighbours,neighboursChild,neighCount,index,point);
+	}
 }
 
 /*
@@ -142,6 +155,9 @@ __global__ void unionVectors(float* neighbours, float* neighboursChild, int* nei
 	@eps:
 */
 __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, float clusterCounter, float minPts, float eps) {
+	if (threadIdx.x > 0)
+		return;
+
 	// Points iteration. Step = dim of point + 1 (1 row)
 	int step = dim+1;
 	for (int i = 0; i < length*step; i += step) {
@@ -159,14 +175,15 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		// number of neighbours
 		int* neighCount = (int*)malloc(sizeof(int));		// TODO: vedere se si può fare senza array
 		neighCount[0] = 0;
-		printf("init first neigh\n");
+
 		findNeighbours<<<NumBlocks,256>>>(d_dataPoints, neighbours, i, eps, length, dim, neighCount);
 		cudaDeviceSynchronize();
-		printf("first neigh\n");
 
 		// if <minPts neighbours are found; assign NOISE to actual point and skip to next point
 		if (neighCount[0]<minPts) {
 			d_dataPoints[i+dim] = NOISE;
+			free(neighbours);
+			free(neighCount);
 			continue;
 		}
 
@@ -176,15 +193,13 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		d_dataPoints[i+dim] = clusterCounter;
 
 		NumBlocks = neighCount[0] / 256;
-		int tmp = neighCount[0];
-		if (tmp % 256 != 0) {
+		if (neighCount[0] % 256 != 0) {
 			NumBlocks += 1;
 		}
-		printf("init dif\n");
+
 		// remove actual point from linearized array
 		neighboursDifference <<<NumBlocks,256>>> (neighbours, i, neighCount,NumBlocks);
 		cudaDeviceSynchronize();
-		printf("dif\n");
 
 		// iterate through neighbours
 		for (int j = 0; j < neighCount[0]; j++) {
@@ -204,14 +219,11 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 				NumBlocks += 1;
 			}
 
-			printf("init second neigh\n");
 			findNeighbours <<<NumBlocks, 256>>>(d_dataPoints, neighboursChild, neighbours[j], eps, length, dim, neighCountChild);
 			cudaDeviceSynchronize();
-			printf("second neigh\n");
 
-			NumBlocks = neighboursChild[0] / 256;
-			tmp = neighboursChild[0];
-			if (tmp % 256 != 0)
+			NumBlocks = neighCountChild[0] / 256;
+			if (neighCountChild[0] % 256 != 0)
 				NumBlocks++;
 
 			// if >= minPts neighbours are found...
@@ -219,11 +231,9 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 				int* index = (int*)malloc(sizeof(int)*length);
 				int* point = (int*)malloc(sizeof(int)); // TODO: change names.
 				point[0] = 0;
-				printf("init union\n");
 				// Add found new neighbour's neighbours to neighbours list 
-				unionVectors<<<NumBlocks,256>>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point);
+				unionVectors<<<NumBlocks,256>>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point,NumBlocks);
 				cudaDeviceSynchronize();
-				printf("union\n");
 				free(index);
 				free(point);
 			}
@@ -264,7 +274,7 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 	HANDLE_ERROR(cudaMemcpy(d_dataPoints, h_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyHostToDevice));
 
 	// Main DBSCAN call
-	dbscan_cuda_device <<<1,1>>> (d_dataPoints, length, dim, clusterCounter, minPts, eps);
+	dbscan_cuda_device <<<1,32>>> (d_dataPoints, length, dim, clusterCounter, minPts, eps);
 
 	// copy of device linearized array (result) to host
 	HANDLE_ERROR(cudaMemcpy(h_dataPoints, d_dataPoints, sizeof(float) * length * (dim + 1), cudaMemcpyDeviceToHost));
