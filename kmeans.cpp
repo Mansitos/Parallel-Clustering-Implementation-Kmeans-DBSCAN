@@ -12,7 +12,7 @@ Mansi Andrea & Christian Cagnoni
 
 int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 float euclideanDistance(float* dataPoint, float* centroid, int dim);
-void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k);
+void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k,bool useParallelism);
 
 void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
 
@@ -60,7 +60,7 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 
 		//5. for each cluster j = 1..k
 		//- new centroid = mean of all points assigned to that cluster
-		updateCentroids(dataPoints, length, dim, centroids, k);
+		updateCentroids(dataPoints, length, dim, centroids, k,useParallelism);
 		//printf("Final Centroids:\n");
 		//printCentroids(centroids, k, dim);
 	}
@@ -112,7 +112,8 @@ Update the centroid coordinates after a cycle of points-assignements-to-centroid
 	@centroids: the list of centroids
 	@k: number of centroids
 */
-void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k) {
+void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k,bool useParallelism) {
+	#pragma omp parallel for if(useParallelism)
 	for (int centroid = 0; centroid < k; centroid++) {
 
 		for (int j = 0; j < dim; j++) {
