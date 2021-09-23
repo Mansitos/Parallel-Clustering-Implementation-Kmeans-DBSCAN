@@ -44,7 +44,7 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 		bool convergenceCheck = true;
 
 		//4. for each data point x_i:
-		#pragma omp parallel for if(useParallelism)
+		#pragma omp parallel for schedule(static) if(useParallelism)
 		for (int i = 0; i < length; i++) {
 			// find the nearest centroid(c_1, c_2 ..c_k)
 			// assign the point to that cluster
@@ -113,7 +113,7 @@ Update the centroid coordinates after a cycle of points-assignements-to-centroid
 	@k: number of centroids
 */
 void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k,bool useParallelism) {
-	#pragma omp parallel for if(useParallelism)
+	#pragma omp parallel for schedule(dynamic) if(useParallelism)
 	for (int centroid = 0; centroid < k; centroid++) {
 
 		for (int j = 0; j < dim; j++) {

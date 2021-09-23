@@ -53,11 +53,11 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 }
 
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
-#pragma parallel for if(udeParallelism)
-	for (auto x : neighbours) {
-		auto it = std::find((*remainder).begin(), (*remainder).end(), x);
+	#pragma omp parallel for schedule(static) if(useParallelism)
+	for (int i = 0; i < neighbours.size();i++) {
+		auto it = std::find((*remainder).begin(), (*remainder).end(), neighbours[i]);
 		if (it == (*remainder).end()) {
-			(*remainder).push_back(x);
+			(*remainder).push_back(neighbours[i]);
 		}
 	}
 }
@@ -76,7 +76,7 @@ std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint)
 
 std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, float* dataPoint, float eps, int dim, int length) {
 	std::vector<float*> neighbour;
-#pragma parallel for if(useParallelism)
+	#pragma omp parallel for schedule(static) if(useParallelism)
 	for (int i = 0; i < length; i++) {
 		float* actualPoint = dataPoints[i];
 		float distance = calculateDistancesDB(actualPoint, useParallelism, dataPoint, dim);
@@ -89,7 +89,7 @@ std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, floa
 
 float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim) {
 	float distance = 0;
-#pragma parallel for if(useParallelism,)
+	#pragma omp parallel for schedule(static) if(useParallelism)
 	for (int i = 0; i < dim; i++)
 		distance += pow(dataPoints[i] - dataPoint[i], 2);
 	distance = sqrt(distance);

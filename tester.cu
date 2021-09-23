@@ -18,7 +18,7 @@ Mansi Andrea & Christian Cagnoni
 #include "dbscanCUDA.h"
 
 using namespace std;
-bool checkCorrectness = true;
+bool checkCorrectness = false;
 
 void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints, string algorithm, std::mt19937 seed);
 
@@ -156,17 +156,17 @@ void runTestSession(bool saveToCsv = false) {
 	int reps = 1;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghts = 4;
-	int lenghtsToTest[nLenghts] = { 50, 100, 1000, 10000 }; // , 100000, 500000, 1000000, 10000000
+	const int nLenghts = 1;
+	int lenghtsToTest[nLenghts] = { 40000000 };//10,50,100,1000,10000,100000,500000,1000000,10000000 };
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
 	const int nDims = 1;
-	int dimensionsToTest[nDims] = { 2 };
+	int dimensionsToTest[nDims] = { 3 };
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 3;//6;
-	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" }; //"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 2;
+	string algorithmsToTest[] = { "kmeans_openmp","kmeans_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	// CSV file initialization
 	ofstream file("tests.txt");
@@ -183,6 +183,15 @@ void runTestSession(bool saveToCsv = false) {
 	// another for with "list of algs to test"
 	for (int alg = 0; alg < nAlgs; alg++) {
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
+
+		if (algorithmsToTest[alg] == "dbscan") {
+			/*lenghtsToTest[3] = 500;
+			lenghtsToTest[4] = 1000;
+			lenghtsToTest[5] = 2000;
+			lenghtsToTest[6] = 3000;
+			lenghtsToTest[7] = 4000;
+			lenghtsToTest[8] = 5000;*/
+		}
 
 		for (int dim = 0; dim < nDims; dim++) {
 			for (int length = 0; length < nLenghts; length++) {
