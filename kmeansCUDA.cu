@@ -15,6 +15,8 @@ __device__ int calculateCentroid(float* dataPoint, int dim, int k, float** centr
 
 __device__ bool convergenceCheck = true;
 __device__ unsigned int countB = 0;
+__device__ int convergenceThreshold = 1; // 1%
+__device__ int errorsCounter = 0; // the amount of different results
 
 // Atomic add implementation for double
 __device__ double atomicAddDouble(double* address, double val)
@@ -140,13 +142,16 @@ CUDA Kernel for centroids update.
 	@NumBlocks: the number of blocks which are running this kernel
 */
 __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, double* d_centroids, int* assignedPoints, int length, int dim, int k, int NumBlocks) {
+	int threadsXblock = 1024;
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid >= length * (dim + 1))
 		return;
 	if (threadIdx.x < k && countB == 0)
 		assignedPoints[tid] = 0;
+
 	int tmp = tid * dim;
 	int tmpId = threadIdx.x * dim;
+
 	if (tmpId < k * dim && countB == 0) {
 		for (int i = tmpId; i < tmpId + dim; i++)
 			d_centroids[i] = 0;
@@ -162,8 +167,8 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	if(threadIdx.x<k)
 		b_assignedPoints[threadIdx.x] = 0;
 	int mul = 0;
-	while (threadIdx.x+mul*256 < k*dim) {
-		b_centroids[threadIdx.x + mul * 256] = 0;
+	while (threadIdx.x+mul* threadsXblock < k*dim) {
+		b_centroids[threadIdx.x + mul * threadsXblock] = 0;
 		mul++;
 	}
 	__syncthreads();
@@ -184,8 +189,8 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	if (threadIdx.x < k)
 		atomicAdd(&assignedPoints[threadIdx.x], b_assignedPoints[threadIdx.x]);
 	mul = 0;
-	while (threadIdx.x + mul * 256 < k * dim) {
-		atomicAddDouble(&d_centroids[threadIdx.x + mul * 256], b_centroids[threadIdx.x + mul * 256]);
+	while (threadIdx.x + mul * threadsXblock < k * dim) {
+		atomicAddDouble(&d_centroids[threadIdx.x + mul * threadsXblock], b_centroids[threadIdx.x + mul * threadsXblock]);
 		mul++;
 	}
 
@@ -201,15 +206,17 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 		while (countB != 2 * NumBlocks) { // busy wait
 		}
 		if (assignedPoints[tmp / dim] != 0) {
-			int NumBlocksChild = dim / 256;
-			if (dim % 256 != 0)
+			int NumBlocksChild = dim / threadsXblock;
+			if (dim % threadsXblock != 0)
 				NumBlocksChild++;
 
-			computeCentroids <<<NumBlocksChild,256>>> (d_centroids, assignedPoints[tmp / dim], dim,tmp);
+			computeCentroids <<<NumBlocksChild, threadsXblock>>> (d_centroids, assignedPoints[tmp / dim], dim,tmp);
 			cudaDeviceSynchronize();
 		}
-		if(tmp==0)
-			countB = 0;
+	}
+	__syncthreads();
+	if (tid == 0) {
+		countB = 0;
 	}
 }
 
@@ -233,7 +240,8 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 	__syncthreads();
 
 	if ((int)(d_dataPoints[tid + dim]) != newCentroid) {
-		AtomicBool(&convergenceCheck, false);
+		//AtomicBool(&convergenceCheck, false);
+		atomicAdd(&errorsCounter, 1);
 		d_dataPoints[tid + dim] = newCentroid;
 	}
 	__syncthreads();
@@ -242,14 +250,21 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 		atomicAdd(&countB, 1);
 
 	__syncthreads();
-
 	// convergence check
 	if (tid == 0) {
-		while (countB != NumBlocks) {
+		while (countB != NumBlocks) { // busy wait
 		}
 		countB = 0;
-		d_convergenceCheck[0] = convergenceCheck;
-		convergenceCheck = true;
+		printf("Convergence threshold:%d | Errs:%d\n", (length * convergenceThreshold) / 100, errorsCounter);
+
+		if (errorsCounter <= ((length * convergenceThreshold) / 100)) {
+			d_convergenceCheck[0] = true;
+			printf("--> Convergence reached! errs < threshold!\n");
+		}
+		else {
+			d_convergenceCheck[0] = false;
+		}
+		errorsCounter = 0;
 	}
 }
 
@@ -305,26 +320,28 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 
 	while (!convergence) {
 
-		convergenceCheck[0] = true;
-		NumBlocks = length / 256;
+		int threadsXblock = 1024;
 
-		if (length % 256 != 0) {
+		convergenceCheck[0] = true;
+		NumBlocks = length / threadsXblock;
+
+		if (length % threadsXblock != 0) {
 			NumBlocks += 1;
 		}
 
-		k_means_cuda_device_assign_centroids << < NumBlocks, 256 >> > (d_dataPoints, d_centroids, length, dim, k, d_convergenceCheck, NumBlocks);
+		k_means_cuda_device_assign_centroids <<< NumBlocks, threadsXblock >>> (d_dataPoints, d_centroids, length, dim, k, d_convergenceCheck, NumBlocks);
 		cudaDeviceSynchronize();
 
 		HANDLE_ERROR(cudaMemcpy(convergenceCheck, d_convergenceCheck, sizeof(bool), cudaMemcpyDeviceToHost));
 
 		convergence = convergenceCheck[0];
-		NumBlocks = (length * (dim + 1)) / 256;
+		NumBlocks = (length * (dim + 1)) / threadsXblock;
 
-		if ((length * (dim + 1)) % 256 != 0) {
+		if ((length * (dim + 1)) % threadsXblock != 0) {
 			NumBlocks += 1;
 		}
 
-		k_means_cuda_device_update_centroids << < NumBlocks, 256, k* (dim + 1) * sizeof(double) + k * sizeof(int) >> > (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
+		k_means_cuda_device_update_centroids <<< NumBlocks, threadsXblock, k* (dim + 1) * sizeof(double) + k * sizeof(int) >>> (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
 		cudaDeviceSynchronize();
 
 	}
