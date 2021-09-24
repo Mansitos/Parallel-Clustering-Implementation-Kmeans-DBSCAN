@@ -15,6 +15,7 @@
 static void HandleError(cudaError_t err, const char* file, int line);
 
 __device__ unsigned int countBD = 0;
+__device__ int threadXblock = 1024;
 
 /*
 
@@ -42,8 +43,8 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	if (tid >= length * (dim + 1))
 		return;
 
-	int NumBlocks = dim / 32;
-	if (dim % 32 != 0)
+	int NumBlocks = dim / threadXblock;
+	if (dim % threadXblock != 0)
 		NumBlocks++;
 
 	// array of calculated distances for each point
@@ -51,7 +52,7 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	// initialization
 	distance[0] = 0;
 
-	calculateDistancesCUDA << <NumBlocks, 32 >> >(d_dataPoints, index, tid, dim, distance);
+	calculateDistancesCUDA << <NumBlocks, threadXblock >> >(d_dataPoints, index, tid, dim, distance);
 	__syncthreads();
 
 	if (threadIdx.x == 0)
@@ -138,10 +139,10 @@ __global__ void unionVectors(float* neighbours, float* neighboursChild, int* nei
 		while (countBD != NumBlocks) {
 		}
 		countBD = 0;
-		int NumBlocksSupport = point[0] / 256;
-		if (point[0] % 256 != 0)
+		int NumBlocksSupport = point[0] / threadXblock;
+		if (point[0] % threadXblock != 0)
 			NumBlocksSupport++;
-		unionVectorsSupport << <NumBlocksSupport,256>> > (neighbours,neighboursChild,neighCount,index,point);
+		unionVectorsSupport << <NumBlocksSupport, threadXblock >> > (neighbours,neighboursChild,neighCount,index,point);
 	}
 }
 
@@ -165,8 +166,8 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		if (d_dataPoints[i+dim] != 0) // 0 = NULL
 			continue; // skip to next point
 
-		int NumBlocks = length/256;
-		if (length % 256 != 0) {
+		int NumBlocks = length/ threadXblock;
+		if (length % threadXblock != 0) {
 			NumBlocks += 1;
 		}
 
@@ -176,7 +177,7 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		int* neighCount = (int*)malloc(sizeof(int));		// TODO: vedere se si può fare senza array
 		neighCount[0] = 0;
 
-		findNeighbours<<<NumBlocks,256>>>(d_dataPoints, neighbours, i, eps, length, dim, neighCount);
+		findNeighbours<<<NumBlocks, threadXblock >>>(d_dataPoints, neighbours, i, eps, length, dim, neighCount);
 		cudaDeviceSynchronize();
 
 		// if <minPts neighbours are found; assign NOISE to actual point and skip to next point
@@ -192,13 +193,13 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		clusterCounter++;
 		d_dataPoints[i+dim] = clusterCounter;
 
-		NumBlocks = neighCount[0] / 256;
-		if (neighCount[0] % 256 != 0) {
+		NumBlocks = neighCount[0] / threadXblock;
+		if (neighCount[0] % threadXblock != 0) {
 			NumBlocks += 1;
 		}
 
 		// remove actual point from linearized array
-		neighboursDifference <<<NumBlocks,256>>> (neighbours, i, neighCount,NumBlocks);
+		neighboursDifference <<<NumBlocks, threadXblock >>> (neighbours, i, neighCount,NumBlocks);
 		cudaDeviceSynchronize();
 
 		// iterate through neighbours
@@ -214,16 +215,16 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 			int* neighCountChild = (int*)malloc(sizeof(int));
 			neighCountChild[0] = 0;
 
-			NumBlocks = length / 256;
-			if (length % 256 != 0) {
+			NumBlocks = length / threadXblock;
+			if (length % threadXblock != 0) {
 				NumBlocks += 1;
 			}
 
-			findNeighbours <<<NumBlocks, 256>>>(d_dataPoints, neighboursChild, neighbours[j], eps, length, dim, neighCountChild);
+			findNeighbours <<<NumBlocks, threadXblock >>>(d_dataPoints, neighboursChild, neighbours[j], eps, length, dim, neighCountChild);
 			cudaDeviceSynchronize();
 
-			NumBlocks = neighCountChild[0] / 256;
-			if (neighCountChild[0] % 256 != 0)
+			NumBlocks = neighCountChild[0] / threadXblock;
+			if (neighCountChild[0] % threadXblock != 0)
 				NumBlocks++;
 
 			// if >= minPts neighbours are found...
@@ -232,7 +233,7 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 				int* point = (int*)malloc(sizeof(int)); // TODO: change names.
 				point[0] = 0;
 				// Add found new neighbour's neighbours to neighbours list 
-				unionVectors<<<NumBlocks,256>>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point,NumBlocks);
+				unionVectors<<<NumBlocks, threadXblock >>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point,NumBlocks);
 				cudaDeviceSynchronize();
 				free(index);
 				free(point);
