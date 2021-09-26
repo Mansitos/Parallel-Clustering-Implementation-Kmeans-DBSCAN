@@ -2,10 +2,10 @@ NVCC=nvcc
 NVCCFLAG =  -gencode=arch=compute_52,code=\"sm_52,compute_52\"
 W10KIT = "E:\Windows Kits\10\Include\10.0.19041.0\ucrt"
 MSVS = "E:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.29.30133\include"
-CUDAINCLUDE = "E:\Programmi\NVIDIA GPU Computing Toolkit\CUDA\v11.3\include"
+CUDAINCLUDE = "%CUDA_PATH%\include"
 OBJFLAG = -G -maxrregcount=0  --machine 64 --compile -cudart static -g -DWIN32 -DWIN64 -D_DEBUG -D_CONSOLE -D_MBCS --keep --keep-dir "Release" -Xcompiler "/EHsc /W3 /nologo /Od /FS /Zi /RTC1 /MDd "
-CUDACRT = "E:\Programmi\NVIDIA GPU Computing Toolkit\CUDA\v11.3\bin/crt"
-CUDALIB = "E:\Programmi\NVIDIA GPU Computing Toolkit\CUDA\v11.3\lib\x64"
+CUDACRT = "%CUDA_PATH%\bin/crt"
+CUDALIB = "%CUDA_PATH%\lib\x64"
 LIB = cudart_static.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib cudart.lib cudadevrt.lib
 INPUTOBJ = "Release\main.cu.obj" "Release\tester.cu.obj" "Release\utils.cu.obj" "Release\inputgenerator.cu.obj" "Release\kmeans.cu.obj" "Release\dbscan.cu.obj" "Release\kmeansCUDA.cu.obj" "Release\dbscanCUDA.cu.obj"
 
