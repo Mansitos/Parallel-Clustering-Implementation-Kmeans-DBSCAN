@@ -90,6 +90,7 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 		atomicAdd(&countBD, 1);
 	__syncthreads();
 	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
+		printf("*************\n");
 		countBD = 0;
 		for (int i = index + 1; i < neighCount[0]; i++)
 			neighbours[i - 1] = neighbours[i];
@@ -134,14 +135,15 @@ __global__ void unionVectors(float* neighbours, float* neighboursChild, int* nei
 		index[atomicAdd(&point[0], 1)] = tid;
 	__syncthreads();
 
-	if (tid == 0) {
-		while (countBD != NumBlocks) {
-		}
+	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
+		printf("----------------------\n");
 		countBD = 0;
 		int NumBlocksSupport = point[0] / threadXblock;
 		if (point[0] % threadXblock != 0)
 			NumBlocksSupport++;
-		unionVectorsSupport << <NumBlocksSupport, threadXblock >> > (neighbours,neighboursChild,neighCount,index,point);
+		unionVectorsSupport << <NumBlocksSupport, threadXblock >> > (neighbours, neighboursChild, neighCount, index, point);
+		cudaDeviceSynchronize();
+		lockD = 0;
 	}
 }
 
@@ -200,6 +202,7 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		// remove actual point from linearized array
 		neighboursDifference <<<NumBlocks, threadXblock >>> (neighbours, i, neighCount,NumBlocks);
 		cudaDeviceSynchronize();
+		printf("################################\n");
 
 		// iterate through neighbours
 		for (int j = 0; j < neighCount[0]; j++) {
@@ -234,6 +237,7 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 				// Add found new neighbour's neighbours to neighbours list 
 				unionVectors<<<NumBlocks, threadXblock >>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point,NumBlocks);
 				cudaDeviceSynchronize();
+				printf("################################\n");
 				free(index);
 				free(point);
 			}
@@ -256,7 +260,7 @@ Main DBSCAN call. Host initialization.
 void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
 
 	// Randomizer
-	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2) / 10);
+	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2)/10);
 
 	float clusterCounter = 0;
 	const float minPts = 2;		// min number of points to create a new cluster

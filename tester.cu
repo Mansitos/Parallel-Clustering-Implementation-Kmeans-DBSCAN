@@ -154,20 +154,23 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 10;
+	int reps = 1;//5;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghts = 9;
-	int lenghtsToTest[nLenghts] = { 10,50,100,1000,10000,20000,100000,1000000,10000000 };
+	const int nLenghtsKmeans = 5;
+	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10,50,100,1000,10000 };//,20000,100000,1000000};
+
+	const int nLenghtsDBscan = 5;
+	int lenghtsToTestDBscan[nLenghtsDBscan] = { 10,50,100,500,1000 };// , 2000, 3000, 4000, 5000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 3;
-	int dimensionsToTest[nDims] = { 2,3,10 };
+	const int nDims = 1;//3;
+	int dimensionsToTest[nDims] = { 512 };//,3,10 };
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 6;
-	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 3;
+	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	// CSV file initialization
 	ofstream file("tests.txt");
@@ -186,13 +189,25 @@ void runTestSession(bool saveToCsv = false) {
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
 
 		for (int dim = 0; dim < nDims; dim++) {
-			for (int length = 0; length < nLenghts; length++) {
-				chrono::duration<double> meanTime = runTest(lenghtsToTest[length], dimensionsToTest[dim], algorithmsToTest[alg], reps,seed);
+			int numTetsts = 0;
+			if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
+				numTetsts = nLenghtsKmeans;
+			if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
+				numTetsts = nLenghtsDBscan;
+			for (int length = 0; length < numTetsts; length++) {
+				chrono::duration<double> meanTime;
+				if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
+					meanTime = runTest(lenghtsToTestKmeans[length], dimensionsToTest[dim], algorithmsToTest[alg], reps, seed);
+				if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
+					meanTime = runTest(lenghtsToTestDBscan[length], dimensionsToTest[dim], algorithmsToTest[alg], reps, seed);
 				
 				testIndex++;
 
 				printf("Reps: %d\n", reps);
-				printf("Elements: %d of dim: %d\n", lenghtsToTest[length], dimensionsToTest[dim]);
+				if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
+					printf("Elements: %d of dim: %d\n", lenghtsToTestKmeans[length], dimensionsToTest[dim]);
+				if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
+					printf("Elements: %d of dim: %d\n", lenghtsToTestDBscan[length], dimensionsToTest[dim]);
 				std::cout << "Mean time: " << meanTime.count() << "s\n";
 				printf("--------------------------------------------\n");
 
@@ -206,7 +221,10 @@ void runTestSession(bool saveToCsv = false) {
 					newline.append(";");
 					newline.append(std::to_string(reps));
 					newline.append(";");
-					newline.append(std::to_string(lenghtsToTest[length]));
+					if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
+						newline.append(std::to_string(lenghtsToTestKmeans[length]));
+					if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
+						newline.append(std::to_string(lenghtsToTestDBscan[length]));
 					newline.append(";");
 					newline.append(std::to_string(dimensionsToTest[dim]));
 					newline.append("\n");
