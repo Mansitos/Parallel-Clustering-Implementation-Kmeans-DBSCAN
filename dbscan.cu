@@ -55,8 +55,13 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
 	#pragma omp parallel for schedule(static) if(useParallelism)
 	for (int i = 0; i < neighbours.size();i++) {
-		auto it = std::find((*remainder).begin(), (*remainder).end(), neighbours[i]);
-		if (it == (*remainder).end()) {
+		bool find = false;
+		for (int j = 0; j < (*remainder).size(); j++) {
+			if ((*remainder).at(j) == neighbours.at(i)) {
+				find = true;
+			}
+		}
+		if(!find){
 			(*remainder).push_back(neighbours[i]);
 		}
 	}
@@ -80,6 +85,7 @@ std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, floa
 	for (int i = 0; i < length; i++) {
 		float* actualPoint = dataPoints[i];
 		float distance = calculateDistancesDB(actualPoint, useParallelism, dataPoint, dim);
+		#pragma omp critical
 		if (distance <= eps) {
 			neighbour.push_back(actualPoint);
 		}

@@ -16,6 +16,7 @@ static void HandleError(cudaError_t err, const char* file, int line);
 
 __device__ unsigned int countBD = 0;
 __device__ int threadXblock = 1024;
+__device__ int lockD = 0;
 
 /*
 
@@ -88,14 +89,12 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 	if (threadIdx.x == 0)
 		atomicAdd(&countBD, 1);
 	__syncthreads();
-	if (tid == 0) {
-		while (countBD != NumBlocks)
-		{
-		}
+	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
 		countBD = 0;
 		for (int i = index + 1; i < neighCount[0]; i++)
 			neighbours[i - 1] = neighbours[i];
 		neighCount[0]--;
+		lockD = 0;
 	}
 }
 

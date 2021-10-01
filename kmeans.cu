@@ -61,8 +61,6 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 		//5. for each cluster j = 1..k
 		//- new centroid = mean of all points assigned to that cluster
 		updateCentroids(dataPoints, length, dim, centroids, k,useParallelism);
-		//printf("Final Centroids:\n");
-		//printCentroids(centroids, k, dim);
 	}
 
 	//6. End (convergence reached)

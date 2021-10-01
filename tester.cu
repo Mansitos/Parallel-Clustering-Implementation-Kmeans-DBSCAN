@@ -63,7 +63,8 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
 			}
 		// SERIAL DBSCAN
-		} else if (algorithm == "dbscan") {
+		}
+		else if (algorithm == "dbscan") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
 			finish = std::chrono::high_resolution_clock::now();
 		// OPENMP DBSCAN
@@ -144,7 +145,7 @@ void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints
 		}
 	}
 
-	printf("Total errors: %d\n", errCounter);
+	printf("Different clusters between serial and parallel version: %d\n", errCounter);
 }
 
 /*
@@ -153,20 +154,20 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 1;
+	int reps = 10;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghts = 1;
-	int lenghtsToTest[nLenghts] = { 40000000 };//10,50,100,1000,10000,100000,500000,1000000,10000000 };
+	const int nLenghts = 9;
+	int lenghtsToTest[nLenghts] = { 10,50,100,1000,10000,20000,100000,1000000,10000000 };
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 1;
-	int dimensionsToTest[nDims] = { 3 };
+	const int nDims = 3;
+	int dimensionsToTest[nDims] = { 2,3,10 };
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 2;
-	string algorithmsToTest[] = { "kmeans_openmp","kmeans_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 6;
+	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	// CSV file initialization
 	ofstream file("tests.txt");
@@ -183,15 +184,6 @@ void runTestSession(bool saveToCsv = false) {
 	// another for with "list of algs to test"
 	for (int alg = 0; alg < nAlgs; alg++) {
 		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
-
-		if (algorithmsToTest[alg] == "dbscan") {
-			/*lenghtsToTest[3] = 500;
-			lenghtsToTest[4] = 1000;
-			lenghtsToTest[5] = 2000;
-			lenghtsToTest[6] = 3000;
-			lenghtsToTest[7] = 4000;
-			lenghtsToTest[8] = 5000;*/
-		}
 
 		for (int dim = 0; dim < nDims; dim++) {
 			for (int length = 0; length < nLenghts; length++) {

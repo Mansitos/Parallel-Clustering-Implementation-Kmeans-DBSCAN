@@ -19,6 +19,7 @@ __device__ unsigned int lock = 0;
 __device__ int convergenceThreshold = 0; // 1%
 __device__ int errorsCounter = 0; // the amount of different results
 __device__ int assigned = 0;
+__device__ bool convergence = false;
 
 // Atomic add implementation for double
 __device__ double atomicAddDouble(double* address, double val)
@@ -69,7 +70,7 @@ __device__ int calculateCentroid_device(double* dataPoint, int tid, int dim, int
 			nearestCentroidIndex = i;
 			minDistance = distance;
 		}
-		else if (distance < minDistance ){
+		else if (distance < minDistance) {
 			nearestCentroidIndex = i;
 			minDistance = distance;
 		}
@@ -106,14 +107,6 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	int tid = blockIdx.x * blockDim.x + threadIdx.x;
 	if (tid >= length * (dim + 1))
 		return;
-	//if (threadIdx.x < k && countB == 0)
-		//assignedPoints[threadIdx.x] = 0;
-	int tmp = tid * dim;
-	int tmpId = threadIdx.x * dim;
-	//if (tmpId < k * dim && countB == 0) {
-		//for (int i = tmpId; i < tmpId + dim; i++)
-			//d_centroids[i] = 0;
-	//}
 
 	if (threadIdx.x == 0)
 		atomicAdd(&countB, 1);
@@ -174,13 +167,13 @@ __global__ void k_means_cuda_device_update_centroids(double* d_dataPoints, doubl
 	}
 
 	__syncthreads();
-	if (threadIdx.x == 0 && countB >= 2 * NumBlocks && assigned>=k) {
+	if (threadIdx.x == 0 && countB >= 2 * NumBlocks && assigned >= k) {
 		assigned = 0;
 		countB = 0;
 		lock = 0;
 
 	}
-	
+
 }
 
 /*
@@ -265,7 +258,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	int NumBlocks;
 
 	bool convergence = false;
-	bool* convergenceCheck = (bool*) malloc (sizeof(bool));
+	bool* convergenceCheck = (bool*)malloc(sizeof(bool));
 	convergenceCheck[0] = true;
 
 	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(double) * length * (dim + 1)));
@@ -279,7 +272,6 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	HANDLE_ERROR(cudaMemcpy(d_assignedPoints, h_assignedPoints, sizeof(int) * k, cudaMemcpyHostToDevice));
 
 	int threadsXblock = 1024;
-
 	while (!convergence) {
 
 		convergenceCheck[0] = true;
@@ -302,7 +294,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		}
 
 		HANDLE_ERROR(cudaMemset(d_assignedPoints, 0, sizeof(int) * k));
-		HANDLE_ERROR(cudaMemset(d_centroids,0, sizeof(double) * k * dim));
+		HANDLE_ERROR(cudaMemset(d_centroids, 0, sizeof(double) * k * dim));
 
 		k_means_cuda_device_update_centroids << < NumBlocks, threadsXblock, k* (dim + 1) * sizeof(double) + k * sizeof(int) >> > (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
 		cudaDeviceSynchronize();
