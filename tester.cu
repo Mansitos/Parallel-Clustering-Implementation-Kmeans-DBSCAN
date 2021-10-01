@@ -44,11 +44,11 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 
 		// Serial KMEANS
 		if (algorithm == "kmeans") {
-			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			k_means(dataPoints, numberOfPoints, dimOfPoints, false, 3, seed);
 			finish = std::chrono::high_resolution_clock::now();
 		// OpenMP KMEANS
 		} else if (algorithm == "kmeans_openmp") {
-			k_means(dataPoints, numberOfPoints, dimOfPoints, true, 2, seed);
+			k_means(dataPoints, numberOfPoints, dimOfPoints, true, 3, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
 			if (checkCorrectness) {
@@ -56,7 +56,7 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 			}
 		// CUDA KMEANS
 		} else if (algorithm == "kmeans_cuda") {
-			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, 3, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
 			if (checkCorrectness) {
@@ -113,7 +113,7 @@ void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints
 
 	// execute the serial algorithm with the same input
 	if (algorithm == "kmeans_openmp" || algorithm == "kmeans_cuda") {
-		k_means(dataPoints, numberOfPoints, dimOfPoints, false, 2, seed);
+		k_means(dataPoints, numberOfPoints, dimOfPoints, false, 3, seed);
 	}
 	else if (algorithm == "dbscan_openmp" || algorithm == "dbscan_cuda") {
 		dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
