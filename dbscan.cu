@@ -45,7 +45,8 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 		actualMinPts = tmp;
 	}
 	const float minPts = actualMinPts;
-	float eps = epsilonCalculation(dataPoints,length,dim,minPts,useParallelism);//sqrt(length * dim);//distrib(seed);
+	float eps = 88.5186310;
+		//epsilonCalculation(dataPoints,length,dim,minPts,useParallelism);//sqrt(length * dim);//distrib(seed);
 	printf("---->%d\n", length);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
@@ -59,17 +60,27 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 		count++;
 		dataPoint[dim] = count;
 		std::vector<float*> remainder = difference(neighbours, dataPoint);
+		printf("###############################\n");
+		printf("%d\n", remainder.size());
 		for (int i = 0; i < remainder.size(); i++) {
+			printf("**************\n");
 			float* dataPoint = remainder.at(i);
 			if (dataPoint[dim] == NOISE)
 				dataPoint[dim] = count;
 			if (dataPoint[dim] != 0)
 				continue;
+			printf(";;;;;;;;;;;;;;;;;\n");
 			dataPoint[dim] = count;
 			std::vector<float*> neighboursChild = findNeighbours(dataPoints, useParallelism, dataPoint, eps, dim, length);
-			if (neighboursChild.size() >= minPts)
+			printf("$$$$$$$$$$$$$$$$$\n");
+			if (neighboursChild.size() >= minPts) {
+				printf("!!!!!!!!!!!!!!!!\n");
 				unionVectors(&remainder, useParallelism, neighboursChild);
+				printf("^^^^^^^^^^^^^^^^^^^\n");
+			}
+			printf("????????????????????\n");
 		}
+		printf("------------------------------------\n");
 	}
 	for (int i = 0; i < length; i++)
 		printf("%f\n", dataPoints[i][dim]);
@@ -84,17 +95,17 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 				find = true;
 			}
 		}
-		#pragma omp critical
-		{
+		//#pragma omp critical
+		//{
 			if (!find) {
 				(*remainder).push_back(neighbours[i]);
 			}
-		}
+		//}
 	}
 }
 
 float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool useParallelism) {
-	float* result = new float[length*minPts];
+	float* result = new float[length * minPts];
 	float* dist = new float[minPts];
 	int index = 0;
 	int next = 0;
@@ -117,6 +128,8 @@ float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool 
 			}
 		}
 		for (int j = 0; j < minPts; j++) {
+			if (index >= length * minPts)
+				printf("...............................\n");
 			result[index++] = dist[j];
 			dist[j] = 0;
 		}
@@ -147,7 +160,8 @@ float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool 
 		if (result[i] == 0)
 			zero++;
 	}
-	return (eps/((length*minPts)-zero)-minDist);
+	float output = (eps / ((length * minPts) - zero)) - minDist;
+	return output;
 }
 
 std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint) {
