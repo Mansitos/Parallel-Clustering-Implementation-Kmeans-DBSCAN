@@ -46,6 +46,7 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 	}
 	const float minPts = actualMinPts;
 	float eps = epsilonCalculation(dataPoints,length,dim,minPts,useParallelism);//sqrt(length * dim);//distrib(seed);
+	printf("---->%d\n", length);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
 		if (dataPoint[dim] != 0)
@@ -70,6 +71,8 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 				unionVectors(&remainder, useParallelism, neighboursChild);
 		}
 	}
+	for (int i = 0; i < length; i++)
+		printf("%f\n", dataPoints[i][dim]);
 }
 
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
@@ -81,8 +84,11 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 				find = true;
 			}
 		}
-		if(!find){
-			(*remainder).push_back(neighbours[i]);
+		#pragma omp critical
+		{
+			if (!find) {
+				(*remainder).push_back(neighbours[i]);
+			}
 		}
 	}
 }
@@ -163,8 +169,10 @@ std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, floa
 		float* actualPoint = dataPoints[i];
 		float distance = calculateDistancesDB(actualPoint, useParallelism, dataPoint, dim);
 		#pragma omp critical
-		if (distance <= eps) {
-			neighbour.push_back(actualPoint);
+		{
+			if (distance <= eps) {
+				neighbour.push_back(actualPoint);
+			}
 		}
 	}
 	return neighbour;
