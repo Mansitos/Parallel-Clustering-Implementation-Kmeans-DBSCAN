@@ -36,7 +36,7 @@ Called by generateRandomInput: generates a random coordinate value for each data
 void initializeDataPoints(float** dataPoints, int length, int dim) {
 	// Randomizer
 	const int minRange = 0;	// min value for coordinates
-	const int maxRange = length;//*10;	// max value for coordinates
+	const int maxRange = length*10;	// max value for coordinates
 	std::random_device rd;  // Will be used to obtain a seed for the random number engine
 	std::mt19937 gen(rd()); // Standard mersenne_twister_engine seeded with rd()
 	std::uniform_real_distribution<> distrib(minRange, maxRange);

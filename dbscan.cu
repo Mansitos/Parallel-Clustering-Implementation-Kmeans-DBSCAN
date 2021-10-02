@@ -21,11 +21,31 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 
 float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim);
 
+float epsilonCalculation(float** dataPoints, int length, int dim, int minPts, bool useParallelism);
+
 void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
-	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2)/10);
+	std::uniform_real_distribution<> distrib(0, (sqrt(length*10) * 2));
 	float count = 0;
-	const float minPts = 2;
-	float eps = distrib(seed);
+	int actualMinPts;
+	const int defMinPts = 4;
+	if (dim == 2) {
+		actualMinPts = defMinPts;
+	}
+	else {
+		int tmp = 2 * dim;
+		while (tmp > length / 2) {
+			if (tmp % 2 != 0) {
+				tmp /= 2;
+				tmp++;
+			}
+			else {
+				tmp /= 2;
+			}
+		}
+		actualMinPts = tmp;
+	}
+	const float minPts = actualMinPts;
+	float eps = epsilonCalculation(dataPoints,length,dim,minPts,useParallelism);//sqrt(length * dim);//distrib(seed);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
 		if (dataPoint[dim] != 0)
@@ -65,6 +85,63 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 			(*remainder).push_back(neighbours[i]);
 		}
 	}
+}
+
+float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool useParallelism) {
+	float* result = new float[length*minPts];
+	float* dist = new float[minPts];
+	int index = 0;
+	int next = 0;
+	for (int i = 0; i < minPts; i++)
+		dist[i] = 0;
+	for (int i = 0; i < length; i++) {
+		float tmp = 0;
+		for (int j = 0; j < length; j++) {
+			tmp = calculateDistancesDB(dataPoints[i], useParallelism, dataPoints[j], dim);
+			if (next < minPts) {
+				dist[next++] = tmp;
+			}
+			else {
+				for (int k = 0; k < minPts; k++) {
+					if (tmp < dist[k]) {
+						dist[k] = tmp;
+						break;
+					}
+				}
+			}
+		}
+		for (int j = 0; j < minPts; j++) {
+			result[index++] = dist[j];
+			dist[j] = 0;
+		}
+		next = 0;
+	}
+	float minDist = -1;
+	for(int i=0;i<length*minPts;i++)
+		for (int j = 0; j < length * minPts; j++) {
+			if (minDist == -1) {
+				float tmp = result[i] - result[j];
+				if (tmp < 0)
+					tmp *= (-1);
+				if(tmp!=0)
+					minDist = tmp;
+			}
+			else {
+				float tmp= result[i] - result[j];
+				if (tmp < 0)
+					tmp *= (-1);
+				if (tmp < minDist && tmp != 0)
+					minDist = tmp;
+			}
+		}
+	float eps = 0;
+	int zero = 0;
+	for (int i = 0; i < length * minPts; i++) {
+		eps += result[i];
+		if (result[i] == 0)
+			zero++;
+	}
+	return (eps/((length*minPts)-zero)-minDist);
 }
 
 std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint) {

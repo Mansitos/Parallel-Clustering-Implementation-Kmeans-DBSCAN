@@ -18,7 +18,7 @@ Mansi Andrea & Christian Cagnoni
 #include "dbscanCUDA.h"
 
 using namespace std;
-bool checkCorrectness = false;
+bool checkCorrectness = true;
 
 void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints, string algorithm, std::mt19937 seed);
 
@@ -36,11 +36,14 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 	float** dataPoints = generateRandomInput(numberOfPoints, dimOfPoints);
 	chrono::duration<double> time = std::chrono::seconds(0);
 
+	// initialization
+	auto start = std::chrono::high_resolution_clock::now();
+	auto finish = std::chrono::high_resolution_clock::now();
+
 	for (int rep = 0; rep < repetitions; rep++) {
 
 		// initialization
-		auto start = std::chrono::high_resolution_clock::now();
-		auto finish = std::chrono::high_resolution_clock::now();
+		start = std::chrono::high_resolution_clock::now();
 
 		// Serial KMEANS
 		if (algorithm == "kmeans") {
@@ -161,16 +164,16 @@ void runTestSession(bool saveToCsv = false) {
 	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10,50,100,1000,10000 };//,20000,100000,1000000};
 
 	const int nLenghtsDBscan = 5;
-	int lenghtsToTestDBscan[nLenghtsDBscan] = { 10,50,100,500,1000 };// , 2000, 3000, 4000, 5000};
+	int lenghtsToTestDBscan[nLenghtsDBscan] = { 10 ,50,100,500,1000 };// , 2000, 3000, 4000, 5000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 1;//3;
-	int dimensionsToTest[nDims] = { 512 };//,3,10 };
+	const int nDims = 3;//3;
+	int dimensionsToTest[nDims] = { 2 ,3,10 };
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 3;
-	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 6;
+	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	// CSV file initialization
 	ofstream file("tests.txt");

@@ -14,6 +14,10 @@
 
 static void HandleError(cudaError_t err, const char* file, int line);
 
+float calculateDistancesDB_CUDA(float* dataPoints, float* dataPoint, int dim);
+
+float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPts);
+
 __device__ unsigned int countBD = 0;
 __device__ int threadXblock = 1024;
 __device__ int lockD = 0;
@@ -64,6 +68,7 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 
 	__syncthreads();
 
+
 	if (distance[0] <= eps) {
 		int t = atomicAdd(&count[0], 1);
 		neighbours[t]=tid;
@@ -90,7 +95,6 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 		atomicAdd(&countBD, 1);
 	__syncthreads();
 	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
-		printf("*************\n");
 		countBD = 0;
 		for (int i = index + 1; i < neighCount[0]; i++)
 			neighbours[i - 1] = neighbours[i];
@@ -136,7 +140,6 @@ __global__ void unionVectors(float* neighbours, float* neighboursChild, int* nei
 	__syncthreads();
 
 	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
-		printf("----------------------\n");
 		countBD = 0;
 		int NumBlocksSupport = point[0] / threadXblock;
 		if (point[0] % threadXblock != 0)
@@ -202,7 +205,6 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		// remove actual point from linearized array
 		neighboursDifference <<<NumBlocks, threadXblock >>> (neighbours, i, neighCount,NumBlocks);
 		cudaDeviceSynchronize();
-		printf("################################\n");
 
 		// iterate through neighbours
 		for (int j = 0; j < neighCount[0]; j++) {
@@ -237,7 +239,6 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 				// Add found new neighbour's neighbours to neighbours list 
 				unionVectors<<<NumBlocks, threadXblock >>>(neighbours, neighboursChild, neighCount, neighCountChild, index, point,NumBlocks);
 				cudaDeviceSynchronize();
-				printf("################################\n");
 				free(index);
 				free(point);
 			}
@@ -248,6 +249,8 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 		free(neighCount);
 	}
 }
+
+
 
 /*
 Main DBSCAN call. Host initialization.
@@ -260,11 +263,29 @@ Main DBSCAN call. Host initialization.
 void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
 
 	// Randomizer
-	std::uniform_real_distribution<> distrib(0, (sqrt(length) * 2)/10);
+	std::uniform_real_distribution<> distrib(0, (sqrt(length*10) * 2));
 
 	float clusterCounter = 0;
-	const float minPts = 2;		// min number of points to create a new cluster
-	float eps = distrib(seed);	// epsilon: min distance between 2 points to be considered neighbours
+	int actualMinPts;
+	const int defMinPts = 4;
+	if (dim == 2) {
+		actualMinPts = defMinPts;
+	}
+	else {
+		int tmp = 2 * dim;
+		while (tmp > length / 2) {
+			if (tmp % 2 != 0) {
+				tmp /= 2;
+				tmp++;
+			}
+			else {
+				tmp /= 2;
+			}
+		}
+		actualMinPts = tmp;
+	}
+	const float minPts = actualMinPts;		// min number of points to create a new cluster
+	float eps = epsilonCalculation_CUDA(dataPoints,length,dim,minPts);//(length * dim) / 3;//distrib(seed);	// epsilon: min distance between 2 points to be considered neighbours
 
 	// Linearization of dataPoints (from nD to 1D)
 	float* h_dataPoints = new float[length * (dim + 1)];
@@ -289,6 +310,71 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 	cudaFree(d_dataPoints);
 	free(h_dataPoints);
 
+}
+
+float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPts) {
+	float* result = new float[length * minPts];
+	float* dist = new float[minPts];
+	int index = 0;
+	int next = 0;
+	for (int i = 0; i < minPts; i++)
+		dist[i] = 0;
+	for (int i = 0; i < length; i++) {
+		float tmp = 0;
+		for (int j = 0; j < length; j++) {
+			tmp = calculateDistancesDB_CUDA(dataPoints[i], dataPoints[j], dim);
+			if (next < minPts) {
+				dist[next++] = tmp;
+			}
+			else {
+				for (int k = 0; k < minPts; k++) {
+					if (tmp < dist[k]) {
+						dist[k] = tmp;
+						break;
+					}
+				}
+			}
+		}
+		for (int j = 0; j < minPts; j++) {
+			result[index++] = dist[j];
+			dist[j] = 0;
+		}
+		next = 0;
+	}
+	float minDist = -1;
+	for (int i = 0; i < length * minPts; i++)
+		for (int j = 0; j < length * minPts; j++) {
+			if (minDist == -1) {
+				float tmp = result[i] - result[j];
+				if (tmp < 0)
+					tmp *= (-1);
+				if (tmp != 0)
+					minDist = tmp;
+			}
+			else {
+				float tmp = result[i] - result[j];
+				if (tmp < 0)
+					tmp *= (-1);
+				if (tmp < minDist && tmp != 0)
+					minDist = tmp;
+			}
+		}
+	float eps = 0;
+	int zero = 0;
+	for (int i = 0; i < length * minPts; i++) {
+		eps += result[i];
+		if (result[i] == 0)
+			zero++;
+	}
+	return (eps / ((length * minPts) - zero) - minDist);
+}
+
+float calculateDistancesDB_CUDA(float* dataPoints, float* dataPoint, int dim) {
+	float distance = 0;
+	for (int i = 0; i < dim; i++)
+		distance += pow(dataPoints[i] - dataPoint[i], 2);
+	distance = sqrt(distance);
+	return distance;
 }
 
 /*
