@@ -44,8 +44,8 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 		}
 		actualMinPts = tmp;
 	}
-	const float minPts = actualMinPts;
-	float eps = epsilonCalculation(dataPoints,length,dim,minPts,useParallelism);//sqrt(length * dim);//distrib(seed);
+	const int minPts = actualMinPts;
+	float eps = epsilonCalculation(dataPoints,length,dim,minPts,false);//sqrt(length * dim);//distrib(seed);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
 		if (dataPoint[dim] != 0)

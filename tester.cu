@@ -149,6 +149,7 @@ void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints
 	}
 
 	printf("Different clusters between serial and parallel version: %d\n", errCounter);
+	free(b);
 }
 
 /*
@@ -163,17 +164,17 @@ void runTestSession(bool saveToCsv = false) {
 	const int nLenghtsKmeans = 5;
 	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10,50,100,1000,10000 };//,20000,100000,1000000};
 
-	const int nLenghtsDBscan = 5;
-	int lenghtsToTestDBscan[nLenghtsDBscan] = { 10 ,50,100,500,1000 };// , 2000, 3000, 4000, 5000};
+	const int nLenghtsDBscan = 1;
+	int lenghtsToTestDBscan[nLenghtsDBscan] = { 1000 };//,500,1000 };// , 2000, 3000, 4000, 5000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 3;//3;
-	int dimensionsToTest[nDims] = { 2 ,3,10 };
+	const int nDims = 1;//3;
+	int dimensionsToTest[nDims] = { 256 };
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 6;
-	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 3;
+	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
 
 	// CSV file initialization
 	ofstream file("tests.txt");

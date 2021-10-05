@@ -284,7 +284,7 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 		}
 		actualMinPts = tmp;
 	}
-	const float minPts = actualMinPts;		// min number of points to create a new cluster
+	const int minPts = actualMinPts;		// min number of points to create a new cluster
 	float eps = epsilonCalculation_CUDA(dataPoints,length,dim,minPts);//(length * dim) / 3;//distrib(seed);	// epsilon: min distance between 2 points to be considered neighbours
 
 	// Linearization of dataPoints (from nD to 1D)
