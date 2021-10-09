@@ -18,7 +18,7 @@ Mansi Andrea & Christian Cagnoni
 #include "dbscanCUDA.h"
 
 using namespace std;
-bool checkCorrectness = true;
+bool checkCorrectness = false;
 
 void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints, string algorithm, std::mt19937 seed);
 
@@ -80,7 +80,7 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 		}
 		// CUDA DBSCAN
 		else if (algorithm == "dbscan_cuda") {
-			dbscan_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, seed);
+			dbscan_cuda_host(dataPoints, numberOfPoints, dimOfPoints, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
 			if (checkCorrectness) {
@@ -158,23 +158,23 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 5;
+	int reps = 1;//5;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghtsKmeans = 5;
-	int lenghtsToTestKmeans[nLenghtsKmeans] = {50,100,1000,10000,50000};
+	const int nLenghtsKmeans = 1;//5;
+	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10000 };//50,100,1000,10000,50000};
 
 	const int nLenghtsDBscan = 4;
 	int lenghtsToTestDBscan[nLenghtsDBscan] = {10,100,250,500};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 3;
-	int dimensionsToTest[nDims] = {2,5,10};
+	const int nDims = 1;//3;
+	int dimensionsToTest[nDims] = { 10 };//2,5,10};
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 6;
-	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda" };
+	const int nAlgs = 1;//6;
+	string algorithmsToTest[] = { "kmeans_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda" };
 
 	// CSV file initialization
 	ofstream file("tests.txt");

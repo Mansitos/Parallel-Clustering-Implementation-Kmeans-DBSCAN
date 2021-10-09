@@ -4,6 +4,6 @@
 #include <iostream>
 #include <random>
 
-void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed);
+void dbscan_cuda_host(float** dataPoints, int length, int dim, std::mt19937 seed);
 
 #endif

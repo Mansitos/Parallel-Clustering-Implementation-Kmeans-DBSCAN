@@ -4,6 +4,6 @@
 #include <iostream>
 #include <random>
 
-void dbscan(float** dataPoints, int length, int dim, std::mt19937 seed);
+void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed);
 
 #endif
