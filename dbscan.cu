@@ -19,10 +19,18 @@ std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint)
 
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours);
 
-float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim);
+float calculateDistancesDB(float* dataPoint1, bool useParallelism, float* dataPoint2, int dim);
 
 float epsilonCalculation(float** dataPoints, int length, int dim, int minPts, bool useParallelism);
 
+/*
+Main function call for dbscan cuda execution.
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@useParallelism: to use or not OpenMP
+	@seed: seed for the randomizer
+*/
 void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
 	std::uniform_real_distribution<> distrib(0, (sqrt(length*10) * 2));
 	float count = 0;
@@ -45,7 +53,7 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 		actualMinPts = tmp;
 	}
 	const int minPts = actualMinPts;
-	float eps = epsilonCalculation(dataPoints,length,dim,minPts,false);//sqrt(length * dim);//distrib(seed);
+	float eps = epsilonCalculation(dataPoints,length,dim,minPts,false);
 	for (int point = 0; point < length; point++) {
 		float* dataPoint = dataPoints[point];
 		if (dataPoint[dim] != 0)
@@ -72,6 +80,9 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 	}
 }
 
+/*
+Given neighbours list of the previous iteration, it adds/updates the neighbours points list (adding their pointers) of new neighbours
+*/
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
 	#pragma omp parallel for schedule(static) if(useParallelism)
 	for (int i = 0; i < neighbours.size();i++) {
@@ -90,6 +101,9 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 	}
 }
 
+/*
+Calculates an appropriate epsilon value for the given randomized input. (Host side - serial)
+*/
 float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool useParallelism) {
 	float* result = new float[length * minPts];
 	float* dist = new float[minPts];
@@ -160,6 +174,15 @@ std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint)
 	return neighbours;
 }
 
+/*
+Given a point, returns an array containing the list of it's neighbours pointers.
+	@dataPoints: pointer to all points
+	@useParallelism: to use or not openMP
+	@dataPoint: the pointer of the point of which neighbours must be computed
+	@eps: epsilon threshold (distance < eps then point is neighbour)
+	@dim: dimension of points
+	@length: number of points
+*/
 std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, float* dataPoint, float eps, int dim, int length) {
 	std::vector<float*> neighbour;
 	#pragma omp parallel for schedule(static) if(useParallelism)
@@ -176,11 +199,19 @@ std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, floa
 	return neighbour;
 }
 
-float calculateDistancesDB(float* dataPoints, bool useParallelism, float* dataPoint, int dim) {
+/*
+Calculates the distance between 2 points.
+	@dataPoint1: pointer to first dataPoint
+	@useParallelism: to use or not openMP
+	@dataPoint2: point to second datapoint
+	@dim: dimension of points
+	@distance: result pointer
+*/
+float calculateDistancesDB(float* dataPoint1, bool useParallelism, float* dataPoint2, int dim) {
 	float distance = 0;
 	#pragma omp parallel for schedule(static) if(useParallelism)
 	for (int i = 0; i < dim; i++)
-		distance += pow(dataPoints[i] - dataPoint[i], 2);
+		distance += pow(dataPoint1[i] - dataPoint2[i], 2);
 	distance = sqrt(distance);
 	return distance;
 }

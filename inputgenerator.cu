@@ -23,11 +23,9 @@ float** generateRandomInput(int numberOfPoints, int dimOfPoints) {
 		// The extra column is used for saving the assigned cluster for that point
 		points[i] = new float[dimOfPoints + 1];	
 	}
-
 	initializeDataPoints(points, numberOfPoints, dimOfPoints);
 
 	return points;
-
 }
 
 /*

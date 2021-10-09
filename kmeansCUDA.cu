@@ -281,7 +281,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 			NumBlocks += 1;
 		}
 
-		k_means_cuda_device_assign_centroids << < NumBlocks, threadsXblock >> > (d_dataPoints, d_centroids, length, dim, k, d_convergenceCheck, NumBlocks);
+		k_means_cuda_device_assign_centroids <<< NumBlocks, threadsXblock >>> (d_dataPoints, d_centroids, length, dim, k, d_convergenceCheck, NumBlocks);
 		cudaDeviceSynchronize();
 
 		HANDLE_ERROR(cudaMemcpy(convergenceCheck, d_convergenceCheck, sizeof(bool), cudaMemcpyDeviceToHost));
@@ -296,7 +296,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		HANDLE_ERROR(cudaMemset(d_assignedPoints, 0, sizeof(int) * k));
 		HANDLE_ERROR(cudaMemset(d_centroids, 0, sizeof(double) * k * dim));
 
-		k_means_cuda_device_update_centroids << < NumBlocks, threadsXblock, k* (dim + 1) * sizeof(double) + k * sizeof(int) >> > (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
+		k_means_cuda_device_update_centroids <<< NumBlocks, threadsXblock, k* (dim + 1) * sizeof(double) + k * sizeof(int) >>> (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
 		cudaDeviceSynchronize();
 
 	}

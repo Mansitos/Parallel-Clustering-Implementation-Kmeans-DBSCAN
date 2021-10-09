@@ -23,7 +23,12 @@ __device__ int threadXblock = 1024;
 __device__ int lockD = 0;
 
 /*
-
+Calculates the distance between 2 points.
+	@d_dataPoints: device pointer to all points
+	@core: index of first point
+	@point: index of second point
+	@dim: dimension of points
+	@distance: result pointer 
 */
 __global__ void calculateDistancesCUDA(float* d_dataPoints, int core, int point, int dim, float* distance) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -33,14 +38,14 @@ __global__ void calculateDistancesCUDA(float* d_dataPoints, int core, int point,
 }
 
 /*
-Given a point index, returns an array containing the list of it's neighbours indexes
-	@d_dataPoints:
-	@neighbours:
-	@index:
-	@eps:
-	@length:
-	@dim:
-	@count:
+Given a point index, returns an array containing the list of it's neighbours indexes and the number (count)
+	@d_dataPoints: device pointer to all points
+	@neighbours: result pointer
+	@index: the index of the point of which neighbours must be computed
+	@eps: epsilon threshold (distance < eps then point is neighbour)
+	@length: number of points
+	@dim: dimension of points
+	@count: the number of found neighbours
 */
 __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index, float eps, int length, int dim, int* count) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -57,7 +62,7 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 	// initialization
 	distance[0] = 0;
 
-	calculateDistancesCUDA << <NumBlocks, threadXblock >> >(d_dataPoints, index, tid, dim, distance);
+	calculateDistancesCUDA <<<NumBlocks, threadXblock >>>(d_dataPoints, index, tid, dim, distance);
 	__syncthreads();
 
 	if (threadIdx.x == 0)
@@ -78,22 +83,25 @@ __global__ void findNeighbours(float* d_dataPoints, float* neighbours, int index
 }
 /*
 Remove actual point from linearized array
-	@neighbours:
-	@index:
-	@neighCount:
+	@neighbours: device pointer to the list of neighbours (indexes) from which the point must be removed
+	@index: index of the point to be removed
+	@neighCount: the number of total neighbours
 */
 __global__ void neighboursDifference(float* neighbours, int index, int* neighCount,int NumBlocks) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= neighCount[0])
 		return;
+
 	if ((int)(neighbours[tid]) == index) {
 		index = 0;
 		atomicAdd(&index, tid);
 	}
 	__syncthreads();
+
 	if (threadIdx.x == 0)
 		atomicAdd(&countBD, 1);
 	__syncthreads();
+
 	if (countBD >= NumBlocks && atomicAdd(&lockD, 1) < 1) {
 		countBD = 0;
 		for (int i = index + 1; i < neighCount[0]; i++)
@@ -103,6 +111,14 @@ __global__ void neighboursDifference(float* neighbours, int index, int* neighCou
 	}
 }
 
+/*
+Support function of unionVectors()
+	@neighbours: device pointer to the list of neighbours
+	@neighboursChild:
+	@neighCount: pointer to neighbours counters
+	@index: 
+	@point: 
+*/
 __global__ void unionVectorsSupport(float* neighbours, float* neighboursChild, int* neighCount, int* index, int* point) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= point[0])
@@ -111,7 +127,7 @@ __global__ void unionVectorsSupport(float* neighbours, float* neighboursChild, i
 }
 
 /*
-...
+Given neighbours list of the previous iteration, it adds/updates the neighbours points list (adding their indexes) of new neighbours
 	@neighbours: first array
 	@neighboursChild: 2nd array
 	@neighCount: length of 1st array
@@ -119,7 +135,7 @@ __global__ void unionVectorsSupport(float* neighbours, float* neighboursChild, i
 	@index: array of positions of new neighbours
 	@point: length of index
 */
-__global__ void unionVectors(float* neighbours, float* neighboursChild, int* neighCount, int* neighCountChild, int* index, int* point,int NumBlocks) {
+__global__ void unionVectors(float* neighbours, float* neighboursChild, int* neighCount, int* neighCountChild, int* index, int* point, int NumBlocks) {
 	int tid = blockDim.x * blockIdx.x + threadIdx.x;
 	if (tid >= neighCountChild[0])
 		return;
@@ -151,13 +167,13 @@ __global__ void unionVectors(float* neighbours, float* neighboursChild, int* nei
 }
 
 /*
-....
-	@dataPoints:
-	@length:
-	@dim:
-	@clusterCounter:
-	@minPts
-	@eps:
+Main function call for dbscan cuda execution.
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@clusterCounter: counter of clusters
+	@minPts: minimum number of points to be considered a new cluster
+	@eps: min. distance for a point to be considered inside a given cluster/neighbours of another point
 */
 __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, float clusterCounter, float minPts, float eps) {
 	if (threadIdx.x > 0)
@@ -254,13 +270,12 @@ __global__ void dbscan_cuda_device(float* d_dataPoints, int length, int dim, flo
 
 /*
 Main DBSCAN call. Host initialization.
-	@dataPoints:
-	@length:
-	@dim:
-	@useParallelism:
-	@seed:
+	@dataPoints: point to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@seed: the seed for the input generator
 */
-void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, std::mt19937 seed) {
+void dbscan_cuda_host(float** dataPoints, int length, int dim, std::mt19937 seed) {
 
 	// Randomizer
 	std::uniform_real_distribution<> distrib(0, (sqrt(length*10) * 2));
@@ -285,7 +300,7 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 		actualMinPts = tmp;
 	}
 	const int minPts = actualMinPts;		// min number of points to create a new cluster
-	float eps = epsilonCalculation_CUDA(dataPoints,length,dim,minPts);//(length * dim) / 3;//distrib(seed);	// epsilon: min distance between 2 points to be considered neighbours
+	float eps = epsilonCalculation_CUDA(dataPoints,length,dim,minPts); // epsilon: min distance between 2 points to be considered neighbours
 
 	// Linearization of dataPoints (from nD to 1D)
 	float* h_dataPoints = new float[length * (dim + 1)];
@@ -312,6 +327,9 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, bool useParalleli
 
 }
 
+/*
+Calculates an appropriate epsilon value for the given randomized input. (Host side - serial)
+*/
 float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPts) {
 	float* result = new float[length * minPts];
 	float* dist = new float[minPts];

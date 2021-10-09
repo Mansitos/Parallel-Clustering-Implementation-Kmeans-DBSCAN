@@ -66,8 +66,7 @@ chrono::duration<double> runTest(int numberOfPoints, int dimOfPoints, string alg
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
 			}
 		// SERIAL DBSCAN
-		}
-		else if (algorithm == "dbscan") {
+		} else if (algorithm == "dbscan") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
 			finish = std::chrono::high_resolution_clock::now();
 		// OPENMP DBSCAN
@@ -149,6 +148,7 @@ void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints
 	}
 
 	printf("Different clusters between serial and parallel version: %d\n", errCounter);
+	
 	free(b);
 }
 
@@ -158,23 +158,23 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = false) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 1;//5;
+	int reps = 5;
 
 	// the lenthts (number of points) that have to be tested
 	const int nLenghtsKmeans = 5;
-	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10,50,100,1000,10000 };//,20000,100000,1000000};
+	int lenghtsToTestKmeans[nLenghtsKmeans] = {50,100,1000,10000,50000};
 
-	const int nLenghtsDBscan = 1;
-	int lenghtsToTestDBscan[nLenghtsDBscan] = { 1000 };//,500,1000 };// , 2000, 3000, 4000, 5000};
+	const int nLenghtsDBscan = 4;
+	int lenghtsToTestDBscan[nLenghtsDBscan] = {10,100,250,500};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 1;//3;
-	int dimensionsToTest[nDims] = { 256 };
+	const int nDims = 3;
+	int dimensionsToTest[nDims] = {2,5,10};
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 3;
-	string algorithmsToTest[] = { "dbscan","dbscan_openmp","dbscan_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda"};
+	const int nAlgs = 6;
+	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda" };
 
 	// CSV file initialization
 	ofstream file("tests.txt");
@@ -183,21 +183,23 @@ void runTestSession(bool saveToCsv = false) {
 		file << firstline;
 	}
 
-	int testIndex = 0;
+	int testIndex = 0; // counter
 
 	std::random_device rd;   // Will be used to obtain a seed for the random number engine
 	std::mt19937 seed(rd()); // Standard mersenne_twister_engine seeded with rd()
 
 	// another for with "list of algs to test"
 	for (int alg = 0; alg < nAlgs; alg++) {
-		cout << "Tested algorithm: " << algorithmsToTest[alg] << "\n";
+		cout << "--> Tested algorithm: " << algorithmsToTest[alg] << "\n\n";
 
 		for (int dim = 0; dim < nDims; dim++) {
 			int numTetsts = 0;
+
 			if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
 				numTetsts = nLenghtsKmeans;
 			if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
 				numTetsts = nLenghtsDBscan;
+
 			for (int length = 0; length < numTetsts; length++) {
 				chrono::duration<double> meanTime;
 				if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
@@ -207,15 +209,17 @@ void runTestSession(bool saveToCsv = false) {
 				
 				testIndex++;
 
+				cout << "--> " <<algorithmsToTest[alg] << "\n";
 				printf("Reps: %d\n", reps);
 				if (algorithmsToTest[alg] == "kmeans" || algorithmsToTest[alg] == "kmeans_openmp" || algorithmsToTest[alg] == "kmeans_cuda")
 					printf("Elements: %d of dim: %d\n", lenghtsToTestKmeans[length], dimensionsToTest[dim]);
 				if (algorithmsToTest[alg] == "dbscan" || algorithmsToTest[alg] == "dbscan_openmp" || algorithmsToTest[alg] == "dbscan_cuda")
 					printf("Elements: %d of dim: %d\n", lenghtsToTestDBscan[length], dimensionsToTest[dim]);
-				std::cout << "Mean time: " << meanTime.count() << "s\n";
-				printf("--------------------------------------------\n");
 
-				if (saveToCsv) {
+				std::cout << "Mean time: " << meanTime.count() << "s\n";
+				printf("\n-----------------------------------------------\n\n");
+
+				if (saveToCsv) { // save to csv procedure
 					string newline = "";
 					newline.append(std::to_string(testIndex));
 					newline.append(";");
@@ -235,7 +239,6 @@ void runTestSession(bool saveToCsv = false) {
 
 					file << newline;
 				}
-
 			}
 		}
 	}
