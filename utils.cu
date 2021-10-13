@@ -41,8 +41,8 @@ void printDataPoints(float** dataPoints, int length, int dim) {
 }
 
 
-void saveToCsv(float** dataPoints, int length, int dim) {
-	ofstream file("datapoints.csv");
+void saveToCsv(float** dataPoints, int length, int dim, string filename) {
+	ofstream file(filename);
 
 	string firstline = "index;";
 	for (int i = 0; i < dim; i++) {

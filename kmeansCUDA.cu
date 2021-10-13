@@ -201,8 +201,10 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 	}
 	__syncthreads();
 
-	if (threadIdx.x == 0)
+	if (threadIdx.x == 0) {
 		atomicAdd(&countB, 1);
+	}
+
 
 	__syncthreads();
 
@@ -223,7 +225,7 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 
 void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
 	// Randomizer
-	std::uniform_real_distribution<> distrib(0, 10);
+	std::uniform_real_distribution<> distrib(0, length*100);
 
 	double* h_dataPoints = new double[length * (dim + 1)];
 	double* h_centroids = new double[k * dim];
@@ -245,6 +247,9 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 			centroids[i][j] = distrib(seed);	// random clusters
 		}
 	}
+
+	// Remove comments for centroids check
+	// printCentroids(centroids, k, dim);
 
 	linealizer(h_dataPoints, dataPoints, length, dim + 1);
 	linealizer(h_centroids, centroids, k, dim);

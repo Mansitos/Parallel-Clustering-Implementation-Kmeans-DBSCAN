@@ -17,7 +17,7 @@ void updateCentroids(float** dataPoints, int length, int dim, float** centroids,
 void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
 
 	// Randomizer
-	std::uniform_real_distribution<> distrib(0, 10);
+	std::uniform_real_distribution<> distrib(0, length*100);
 
 	// Local variables
 	bool convergence = false;
@@ -37,6 +37,9 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 			centroids[i][j] = distrib(seed);	// random clusters
 		}	
 	}
+
+	// Remove comments for centroids check
+    // printCentroids(centroids, k, dim);
 
 	//3. Repeat steps 4 and 5 until convergence or until the end of a fixed number of iterations
 	while(!convergence) {

@@ -8,7 +8,7 @@ Mansi Andrea & Christian Cagnoni
 
 void printCentroids(float** centroids, int length, int dim);
 void printDataPoints(float** dataPoints, int length, int dim);
-void saveToCsv(float** dataPoints, int length, int dim);
+void saveToCsv(float** dataPoints, int length, int dim, std::string filename);
 void clearClusterColumn(float** dataPoints, int length, int dim);
 void linealizer(float* output, float** input, int length, int dim);
 void linealizer(double* output, float** input, int length, int dim);
