@@ -18,9 +18,9 @@ float calculateDistancesDB_CUDA(float* dataPoints, float* dataPoint, int dim);
 
 float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPts);
 
-__device__ unsigned int countBD = 0;
-__device__ int threadXblock = 1024;
-__device__ int lockD = 0;
+__device__ unsigned int countBD = 0;	//counter for CUDA blocks
+__device__ int threadXblock = 1024;		//number of thread per block
+__device__ int lockD = 0;				//variable to lock access to part of code
 
 /*
 Calculates the distance between 2 points.
@@ -329,14 +329,22 @@ void dbscan_cuda_host(float** dataPoints, int length, int dim, std::mt19937 seed
 
 /*
 Calculates an appropriate epsilon value for the given randomized input. (Host side - serial)
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@minPts: threshold of neighbours
+
+	Return: the epsilon parameter for the function to work
 */
 float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPts) {
 	float* result = new float[length * minPts];
 	float* dist = new float[minPts];
 	int index = 0;
 	int next = 0;
+	//reset dist array
 	for (int i = 0; i < minPts; i++)
 		dist[i] = 0;
+	//get the minPts points that have minimum distance for all points
 	for (int i = 0; i < length; i++) {
 		float tmp = 0;
 		for (int j = 0; j < length; j++) {
@@ -359,6 +367,7 @@ float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPt
 		}
 		next = 0;
 	}
+	//get the minimum distance between the all minPts
 	float minDist = -1;
 	for (int i = 0; i < length * minPts; i++)
 		for (int j = 0; j < length * minPts; j++) {
@@ -377,6 +386,8 @@ float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPt
 					minDist = tmp;
 			}
 		}
+	//count the elements that have distance equal to zero
+	//and add the distances to eps
 	float eps = 0;
 	int zero = 0;
 	for (int i = 0; i < length * minPts; i++) {
@@ -384,9 +395,18 @@ float epsilonCalculation_CUDA(float** dataPoints, int length, int dim, int minPt
 		if (result[i] == 0)
 			zero++;
 	}
+	//return the mean of eps adjust with count of elements equal to zero and minimum distance
 	return (eps / ((length * minPts) - zero) - minDist);
 }
 
+/*
+Calculates the distance between 2 points.
+	@dataPoints: pointer to all points
+	@dataPoint: the actual point
+	@dim: dimension of points
+
+	Return: the distance between dataPoints and dataPoint
+*/
 float calculateDistancesDB_CUDA(float* dataPoints, float* dataPoint, int dim) {
 	float distance = 0;
 	for (int i = 0; i < dim; i++)

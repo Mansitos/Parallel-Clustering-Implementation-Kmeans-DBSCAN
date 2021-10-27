@@ -12,12 +12,24 @@ Mansi Andrea & Christian Cagnoni
 
 using namespace std;
 
+/*
+support function to clear the cluster column into dataPoints
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+*/
 void clearClusterColumn(float** dataPoints, int length, int dim) {
 	for (int i = 0; i < length; i++) {
 		dataPoints[i][dim] = NULL;
 	}
 }
 
+/*
+support function to print the centroids
+	@centroids: pointer to centroids
+	@length: number of centroids
+	@dim: dimension of centroids (2D, 3D etc.)
+*/
 void printCentroids(float** centroids, int length, int dim) {
 	for (int i = 0; i < length; i++) {
 		printf("Centroid_%d: ", i);
@@ -29,6 +41,12 @@ void printCentroids(float** centroids, int length, int dim) {
 	}
 }
 
+/*
+support function to print the dataPoints
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+*/
 void printDataPoints(float** dataPoints, int length, int dim) {
 	for (int i = 0; i < length; i++) {
 		printf("%d: ", i);
@@ -40,7 +58,13 @@ void printDataPoints(float** dataPoints, int length, int dim) {
 	}
 }
 
-
+/*
+support function to save dataPoints in a .csv file
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@filename: the name of the file
+*/
 void saveToCsv(float** dataPoints, int length, int dim, string filename) {
 	ofstream file(filename);
 
@@ -69,6 +93,13 @@ void saveToCsv(float** dataPoints, int length, int dim, string filename) {
 	}
 }
 
+/*
+support function to convert an array of array in a single vector
+	@output: vector of output
+	@input: data input
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+*/
 void linealizer(float* output, float** input, int length, int dim) {
 	int index = 0;
 	for (int i = 0; i < length; i++)
@@ -83,6 +114,13 @@ void linealizer(double* output, float** input, int length, int dim) {
 			output[index++] = input[i][j];
 }
 
+/*
+support function to convert a single vector in an array of array
+	@output: array of array of output
+	@input: data input
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+*/
 void delinealizer(float** output, float* input, int length, int dim) {
 	int index = 0;
 	for (int i = dim; i < length; i += (dim+1))

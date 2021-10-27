@@ -24,7 +24,7 @@ float calculateDistancesDB(float* dataPoint1, bool useParallelism, float* dataPo
 float epsilonCalculation(float** dataPoints, int length, int dim, int minPts, bool useParallelism);
 
 /*
-Main function call for dbscan cuda execution.
+Main function call for dbscan execution.
 	@dataPoints: pointer to datapoints
 	@length: number of points
 	@dim: dimension of points (2D, 3D etc.)
@@ -82,6 +82,9 @@ void dbscan(float** dataPoints, int length, int dim, bool useParallelism, std::m
 
 /*
 Given neighbours list of the previous iteration, it adds/updates the neighbours points list (adding their pointers) of new neighbours
+	@remainder: initial vector of neighbours
+	@useParallelism: to use or not OpenMP
+	@neighbours: neighbors for the actual point
 */
 void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vector<float*> neighbours) {
 	#pragma omp parallel for schedule(static) if(useParallelism)
@@ -103,6 +106,13 @@ void unionVectors(std::vector<float*>* remainder, bool useParallelism, std::vect
 
 /*
 Calculates an appropriate epsilon value for the given randomized input. (Host side - serial)
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@minPts: threshold of neighbours
+	@useParallelism: to use or not OpenMP
+
+	Return: the epsilon parameter for the function to work
 */
 float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool useParallelism) {
 	float* result = new float[length * minPts];
@@ -162,6 +172,13 @@ float epsilonCalculation(float** dataPoints,int length,int dim,int minPts, bool 
 	return output;
 }
 
+/*
+Given the vector of neighbours and the pointer of the actual point, remove it from the vector
+	@neighbours: vector of the neighbours of dataPoint
+	@dataPoint: the actual point
+
+	Return: the neighbours vector without dataPoint
+*/
 std::vector<float*> difference(std::vector<float*> neighbours, float* dataPoint) {
 	auto it = std::find(neighbours.begin(), neighbours.end(), dataPoint);
 
@@ -182,6 +199,8 @@ Given a point, returns an array containing the list of it's neighbours pointers.
 	@eps: epsilon threshold (distance < eps then point is neighbour)
 	@dim: dimension of points
 	@length: number of points
+
+	Return: a vector of neighbours of dataPoint
 */
 std::vector<float*> findNeighbours(float** dataPoints, bool useParallelism, float* dataPoint, float eps, int dim, int length) {
 	std::vector<float*> neighbour;
@@ -206,6 +225,8 @@ Calculates the distance between 2 points.
 	@dataPoint2: point to second datapoint
 	@dim: dimension of points
 	@distance: result pointer
+
+	Return: the distance between dataPoint1 and dataPoint2
 */
 float calculateDistancesDB(float* dataPoint1, bool useParallelism, float* dataPoint2, int dim) {
 	float distance = 0;

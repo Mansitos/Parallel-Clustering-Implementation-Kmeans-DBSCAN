@@ -3,6 +3,9 @@ Progetto Programmazione su Architetture Parallele - UNIUD 2021
 Mansi Andrea & Christian Cagnoni
 */
 
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+#include "device_functions.h"
 #include <stdio.h>
 #include <math.h>
 #include <random>
@@ -23,6 +26,11 @@ bool checkCorrectness = true;
 int k = 5; // k-means k value
 
 void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints, string algorithm, std::mt19937 seed);
+
+/*
+kernel to reduce overhead to the launch of others kernel
+*/
+__global__ void dummyKernel() {}
 
 /*
 Run a test for the specified algorithm.
@@ -52,14 +60,10 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
-			saveToCsv(dataPoints, numberOfPoints, dimOfPoints,"serialResult.txt");
-
 		// OpenMP KMEANS
 		} else if (algorithm == "kmeans_openmp") {
 			k_means(dataPoints, numberOfPoints, dimOfPoints, true, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
-
-			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "openmpResult.txt");
 
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
@@ -69,8 +73,6 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
-			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "cudaResult.txt");
-
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
 			}
@@ -78,6 +80,7 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 		} else if (algorithm == "dbscan") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
 			finish = std::chrono::high_resolution_clock::now();
+
 		// OPENMP DBSCAN
 		} else if (algorithm == "dbscan_openmp") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, true, seed);
@@ -109,7 +112,12 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 }
 
 /*
-	Given an algorithm and its execution result, checks if it is valid. (by executing the serial version)
+Given an algorithm and its execution result, checks if it is valid. (by executing the serial version)
+	@dataPoints: pointer to all points
+	@numberOfPoints: the amout of points 
+	@dimOfPoints: specifies the dimension for the points (2D, 3D etc.)
+	@algorithm: the algorithm to test
+	@seed: seed for the randomizer 
 */
 void checkResCorrectness(float** dataPoints, int numberOfPoints, int dimOfPoints, string algorithm, std::mt19937 seed) {
 	// get result column from dataPoints
@@ -167,23 +175,23 @@ Run an entire tests sessions.
 */
 void runTestSession(bool saveToCsv = true) {
 	// how much times a test must be executed (for better accuracy)
-	int reps = 1;
+	int reps = 3;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghtsKmeans = 1;//5;
-	int lenghtsToTestKmeans[nLenghtsKmeans] = {20000};//10,50,100,250,500,1000,2500,5000,7500,10000, 25000,50000, 100000, 500000, 1000000, 5000000, 10000000, 20000000, 30000000 };
+	const int nLenghtsKmeans = 15;
+	int lenghtsToTestKmeans[nLenghtsKmeans] = {0,50,100,250,500,1000,2500,5000,7500,10000, 25000,50000, 100000, 500000, 1000000};
 
-	const int nLenghtsDBscan = 4;
-	int lenghtsToTestDBscan[nLenghtsDBscan] = {50};
+	const int nLenghtsDBscan = 10;
+	int lenghtsToTestDBscan[nLenghtsDBscan] = {50,100,250,500,750,1000,2000,3000,4000,5000};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 1;//3;
-	int dimensionsToTest[nDims] = {2};//2,5,10};
+	const int nDims = 3;
+	int dimensionsToTest[nDims] = {2,5,10};
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp
-	const int nAlgs = 3;//6;
-	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda" };//"kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda" };
+	const int nAlgs = 6;
+	string algorithmsToTest[] = { "kmeans","kmeans_openmp","kmeans_cuda","dbscan","dbscan_openmp","dbscan_cuda" };
 
 	// CSV file initialization
 	ofstream file("tests.txt");
@@ -202,7 +210,7 @@ void runTestSession(bool saveToCsv = true) {
 	   There's overhead when a program launches the first Cuda kernel.
 	   You should first launch a blank kernel when you check the running time of your kernels.
 	 */
-	// TODO LAUNCH DUMMY KERNEL
+	dummyKernel <<<1,32>>> ();
 	//#########################################################################################
 
 	// Iteration through algorithms to test

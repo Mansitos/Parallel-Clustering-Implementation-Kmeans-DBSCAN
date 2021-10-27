@@ -14,6 +14,14 @@ int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 float euclideanDistance(float* dataPoint, float* centroid, int dim);
 void updateCentroids(float** dataPoints, int length, int dim, float** centroids, int k,bool useParallelism);
 
+/*
+Main function call for kmeans execution.
+	@dataPoints: pointer to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@useParallelism: to use or not OpenMP
+	@seed: seed for the randomizer
+*/
 void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
 
 	// Randomizer
@@ -68,6 +76,15 @@ void k_means(float** dataPoints, int length, int dim, bool useParallelism, int k
 	//6. End (convergence reached)
 }
 
+/*
+Assign the correct centroid to the dataPoint in base of the distance between centroid and dataPoint
+	@dataPoint: pointer to actual point
+	@dim: dimension of points (2D, 3D etc.)
+	@k: number of centroids
+	@centroids: pointer to the centroids
+
+	Return: the nearest centroid to the dataPoint
+*/
 int calculateCentroid(float* dataPoint, int dim, int k, float** centroids) {
 	int nearestCentroidIndex = dataPoint[dim];
 	bool firstIteration = true;

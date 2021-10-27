@@ -7,6 +7,9 @@ Mansi Andrea & Christian Cagnoni
 #include <stdlib.h>
 #include "tester.h"
 
+/*
+Main function that start the test session
+*/
 int main() {
 	runTestSession(true);
 }

@@ -13,15 +13,19 @@ static void HandleError(cudaError_t err, const char* file, int line);
 __device__ float euclideanDistance(float* dataPoint, float* centroid, int dim);
 __device__ int calculateCentroid(float* dataPoint, int dim, int k, float** centroids);
 
-__device__ bool convergenceCheck = true;
-__device__ unsigned int countB = 0;
-__device__ unsigned int lock = 0;
-__device__ int convergenceThreshold = 0; // 1%
-__device__ int errorsCounter = 0; // the amount of different results
-__device__ int assigned = 0;
-__device__ bool convergence = false;
+__device__ unsigned int countB = 0;			// counter for CUDA blocks
+__device__ unsigned int lock = 0;			// variable to lock access to part of code
+__device__ int convergenceThreshold = 0; 	// 0%
+__device__ int errorsCounter = 0; 			// the amount of different results
+__device__ int assigned = 0;				// counter of elements assigned 
 
-// Atomic add implementation for double
+/*
+Atomic add implementation for double
+	@address: the address of the value to be updatig
+	@val: the value to be adding
+
+	Return: the old value of address
+*/
 __device__ double atomicAddDouble(double* address, double val)
 {
 	unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -41,6 +45,8 @@ Function for euclidean distance calculation between 2 given points
 	@centroid: the list of centroids (2nd points)
 	@index: the index of the second points
 	@dim: dimension of points: 3D, 4D, etc.
+
+	Return: the distance between dataPoint and centroid
 */
 __device__ double euclideanDistance_device(double* dataPoint, int tid, double* centroid, int index, int dim) {
 	double sum = 0;
@@ -58,6 +64,8 @@ Function for assigning a centroid to a given point. Iterates each centroid and c
 	@dim: dimension of points: 3D etc.
 	@k: number of centroids
 	@centroids: list of centroids.
+
+	Return: the index of the nearest centroid 
 */
 __device__ int calculateCentroid_device(double* dataPoint, int tid, int dim, int k, double* centroids) {
 	int nearestCentroidIndex = dataPoint[tid + dim];
@@ -205,7 +213,6 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 		atomicAdd(&countB, 1);
 	}
 
-
 	__syncthreads();
 
 	if (countB >= NumBlocks) {
@@ -223,6 +230,14 @@ __global__ void k_means_cuda_device_assign_centroids(double* d_dataPoints, doubl
 	}
 }
 
+/*
+Main KMEANS call. Host initialization.
+	@dataPoints: point to datapoints
+	@length: number of points
+	@dim: dimension of points (2D, 3D etc.)
+	@useParallelism: to use or not OpenMP
+	@seed: the seed for the input generator
+*/
 void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallelism, int k, std::mt19937 seed) {
 	// Randomizer
 	std::uniform_real_distribution<> distrib(0, length*100);
@@ -248,9 +263,7 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		}
 	}
 
-	// Remove comments for centroids check
-	// printCentroids(centroids, k, dim);
-
+	// Linearization of dataPoints (from nD to 1D) and centroids (from nD to 1D)
 	linealizer(h_dataPoints, dataPoints, length, dim + 1);
 	linealizer(h_centroids, centroids, k, dim);
 
@@ -266,17 +279,20 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 	bool* convergenceCheck = (bool*)malloc(sizeof(bool));
 	convergenceCheck[0] = true;
 
+	// device allocation for linearized array
 	HANDLE_ERROR(cudaMalloc((void**)&d_dataPoints, sizeof(double) * length * (dim + 1)));
 	HANDLE_ERROR(cudaMalloc((void**)&d_centroids, sizeof(double) * k * dim));
 	HANDLE_ERROR(cudaMalloc((void**)&d_assignedPoints, sizeof(int) * k));
 	HANDLE_ERROR(cudaMalloc((void**)&d_convergenceCheck, sizeof(bool)));
 
+	// copy of host linearized array to device
 	HANDLE_ERROR(cudaMemcpy(d_dataPoints, h_dataPoints, sizeof(double) * length * (dim + 1), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(d_centroids, h_centroids, sizeof(double) * k * dim, cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(d_convergenceCheck, convergenceCheck, sizeof(bool), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(d_assignedPoints, h_assignedPoints, sizeof(int) * k, cudaMemcpyHostToDevice));
 
-	int threadsXblock = 1024;
+	int threadsXblock = 1024;	//number of thread per block
+	//loop until convergence is not reached
 	while (!convergence) {
 
 		convergenceCheck[0] = true;
@@ -285,10 +301,11 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 		if (length % threadsXblock != 0) {
 			NumBlocks += 1;
 		}
-
+		//KMEANS call to assign centroids
 		k_means_cuda_device_assign_centroids <<< NumBlocks, threadsXblock >>> (d_dataPoints, d_centroids, length, dim, k, d_convergenceCheck, NumBlocks);
 		cudaDeviceSynchronize();
 
+		// copy of device convergence array to host
 		HANDLE_ERROR(cudaMemcpy(convergenceCheck, d_convergenceCheck, sizeof(bool), cudaMemcpyDeviceToHost));
 
 		convergence = convergenceCheck[0];
@@ -298,19 +315,23 @@ void k_means_cuda_host(float** dataPoints, int length, int dim, bool useParallel
 			NumBlocks += 1;
 		}
 
+		//memset to zero for centroids and counter of assigned points in device copy
 		HANDLE_ERROR(cudaMemset(d_assignedPoints, 0, sizeof(int) * k));
 		HANDLE_ERROR(cudaMemset(d_centroids, 0, sizeof(double) * k * dim));
 
+		//KMEANS call to update centroids
 		k_means_cuda_device_update_centroids <<< NumBlocks, threadsXblock, k* (dim + 1) * sizeof(double) + k * sizeof(int) >>> (d_dataPoints, d_centroids, d_assignedPoints, length, dim, k, NumBlocks);
 		cudaDeviceSynchronize();
 
 	}
 
+	// copy of device linearized array (result) to host
 	HANDLE_ERROR(cudaMemcpy(h_dataPoints, d_dataPoints, sizeof(double) * length * (dim + 1), cudaMemcpyDeviceToHost));
 	HANDLE_ERROR(cudaMemcpy(h_centroids, d_centroids, sizeof(double) * k * dim, cudaMemcpyDeviceToHost));
 
 	delinealizer(dataPoints, h_dataPoints, length * (dim + 1), dim);
 
+	// Memory deallocation
 	cudaFree(d_dataPoints);
 	cudaFree(d_centroids);
 	cudaFree(d_assignedPoints);

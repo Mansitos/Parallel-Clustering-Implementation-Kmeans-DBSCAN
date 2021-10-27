@@ -15,6 +15,10 @@ float** generateRandomInput(int numberOfPoints, int dimOfPoints, std::mt19937 se
 Generate a random instance for a clustering algorithm.
 	@numberOfPoints: the amout of random points to be generated
 	@dimOfPoints: the dimension of points to be generated
+	@seed: seed for the randomizer
+	@type: the type of randomizer, clusters or random
+
+	Return: the pointer of the dataPoints
 */
 float** generateRandomInput(int numberOfPoints, int dimOfPoints, std::mt19937 seed,std::string type) {
 	
@@ -30,6 +34,11 @@ float** generateRandomInput(int numberOfPoints, int dimOfPoints, std::mt19937 se
 
 /*
 Called by generateRandomInput: generates a random coordinate value for each dataPoint.
+	@dataPoints: pointer to datapoints
+	@lenght: the amout of random points to be initialized
+	@dimOfPoints: the dimension of points to be initialized
+	@seed: seed for the randomizer
+	@type: the type of randomizer, clusters or random
 */
 void initializeDataPoints(float** dataPoints, int length, int dim, std::mt19937 seed, std::string type) {
 	// Randomizer
