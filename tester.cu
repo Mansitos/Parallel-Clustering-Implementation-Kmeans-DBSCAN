@@ -60,10 +60,16 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 			k_means(dataPoints, numberOfPoints, dimOfPoints, false, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "serialResultKMeans.txt");
+
+
 		// OpenMP KMEANS
 		} else if (algorithm == "kmeans_openmp") {
 			k_means(dataPoints, numberOfPoints, dimOfPoints, true, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
+
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "openMPResultKMeans.txt");
+
 
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
@@ -73,6 +79,9 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 			k_means_cuda_host(dataPoints, numberOfPoints, dimOfPoints, false, k, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "cudaResultKMeans.txt");
+
+
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
 			}
@@ -81,10 +90,14 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, false, seed);
 			finish = std::chrono::high_resolution_clock::now();
 
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "serialResultDBscan.txt");
+
 		// OPENMP DBSCAN
 		} else if (algorithm == "dbscan_openmp") {
 			dbscan(dataPoints, numberOfPoints, dimOfPoints, true, seed);
 			finish = std::chrono::high_resolution_clock::now();
+
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "openMPResultDBscan.txt");
 
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
@@ -94,6 +107,8 @@ chrono::duration<double> runTest( int numberOfPoints, int dimOfPoints, string al
 		else if (algorithm == "dbscan_cuda") {
 			dbscan_cuda_host(dataPoints, numberOfPoints, dimOfPoints, seed);
 			finish = std::chrono::high_resolution_clock::now();
+
+			saveToCsv(dataPoints, numberOfPoints, dimOfPoints, "cudaResultDBscan.txt");
 
 			if (checkCorrectness) {
 				checkResCorrectness(dataPoints, numberOfPoints, dimOfPoints, algorithm, seed);
@@ -178,15 +193,15 @@ void runTestSession(bool saveToCsv = true) {
 	int reps = 3;
 
 	// the lenthts (number of points) that have to be tested
-	const int nLenghtsKmeans = 15;
-	int lenghtsToTestKmeans[nLenghtsKmeans] = {0,50,100,250,500,1000,2500,5000,7500,10000, 25000,50000, 100000, 500000, 1000000};
+	const int nLenghtsKmeans = 10;
+	int lenghtsToTestKmeans[nLenghtsKmeans] = { 10,50,100,250,500,1000,5000,10000,50000,100000};
 
-	const int nLenghtsDBscan = 10;
-	int lenghtsToTestDBscan[nLenghtsDBscan] = {50,100,250,500,750,1000,2000,3000,4000,5000};
+	const int nLenghtsDBscan = 6;
+	int lenghtsToTestDBscan[nLenghtsDBscan] = { 10,50,100,250,500,750};
 
 	// the dimensions (of the points: 2D, 3D etc.) that have to be tested
-	const int nDims = 3;
-	int dimensionsToTest[nDims] = {2,5,10};
+	const int nDims = 1;
+	int dimensionsToTest[nDims] = {2};
 
 	// the algorithms that have to be testeds
 	// valid values: kmeans | dbscan | cuda_kmeans | cuda_dbscan | kmeans_openmp | dbscan_openmp

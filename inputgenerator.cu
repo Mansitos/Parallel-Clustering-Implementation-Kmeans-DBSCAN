@@ -68,10 +68,11 @@ void initializeDataPoints(float** dataPoints, int length, int dim, std::mt19937 
 	if (spreadPoints) {
 		int step = (length / clusters);
 		int mulfactor = length / 20;
-		printf("step:%d\n", step);
+		//printf("step:%d\n", step);
 			for (int c = 1; c <= clusters; c++) {
 				for (int k = step*(c-1); k < step*c; k++) {
-					dataPoints[k][0] += mulfactor *step*(c-1);
+					dataPoints[k][0] = step * 100 * (c - 1);
+					//dataPoints[k][0] += mulfactor *step*(c-1);
 			}
 		}
 	}
